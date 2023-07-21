@@ -114,4 +114,10 @@ jar {
 
 jar.finalizedBy('reobfJar')
 
-
+publishing {
+    publications {
+        register('mavenJava', MavenPublication) {
+            artifact jar
+        }
+    }
+}

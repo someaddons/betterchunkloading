@@ -1,6 +1,7 @@
 package com.template;
 
-import com.template.config.Configuration;
+import com.cupboard.config.CupboardConfig;
+import com.template.config.CommonConfiguration;
 import com.template.event.EventHandler;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.IExtensionPoint;
@@ -20,10 +21,10 @@ import static com.template.TemplateMod.MOD_ID;
 @Mod(MOD_ID)
 public class TemplateMod
 {
-    public static final String        MOD_ID = "template";
-    public static final Logger        LOGGER = LogManager.getLogger();
-    private static      Configuration config = null;
-    public static       Random        rand   = new Random();
+    public static final String                              MOD_ID = "template";
+    public static final Logger                              LOGGER = LogManager.getLogger();
+    private static      CupboardConfig<CommonConfiguration> config = new CupboardConfig<>(MOD_ID, new CommonConfiguration());
+    public static       Random                              rand   = new Random();
 
     public TemplateMod()
     {
@@ -43,16 +44,5 @@ public class TemplateMod
     private void setup(final FMLCommonSetupEvent event)
     {
         LOGGER.info(MOD_ID + " mod initialized");
-    }
-
-    public static Configuration getConfig()
-    {
-        if (config == null)
-        {
-            config = new Configuration();
-            config.load();
-        }
-
-        return config;
     }
 }

@@ -1,5 +1,6 @@
 package com.betterchunkloading.mixin;
 
+import com.betterchunkloading.BetterChunkLoading;
 import com.betterchunkloading.event.EventHandler;
 import net.minecraft.core.Registry;
 import net.minecraft.world.level.ChunkPos;
@@ -43,7 +44,10 @@ public abstract class LevelChunkMixin extends ChunkAccess
     @Inject(method = "postProcessGeneration", at = @At("HEAD"))
     private void onPost(final CallbackInfo ci)
     {
-        EventHandler.delayedLoading.put(new EventHandler.ChunkInfo(level.getServer().getTickCount(), chunkPos, level), postProcessing.clone());
-        Arrays.fill(this.postProcessing, null);
+        if (BetterChunkLoading.config.getCommonConfig().enableFasterChunkLoading)
+        {
+            EventHandler.delayedLoading.put(new EventHandler.ChunkInfo(level.getServer().getTickCount(), chunkPos, level), postProcessing.clone());
+            Arrays.fill(this.postProcessing, null);
+        }
     }
 }

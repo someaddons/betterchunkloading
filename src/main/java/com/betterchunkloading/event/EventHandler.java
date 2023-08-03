@@ -1,5 +1,6 @@
 package com.betterchunkloading.event;
 
+import com.betterchunkloading.BetterChunkLoading;
 import it.unimi.dsi.fastutil.shorts.ShortList;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.ChunkPos;

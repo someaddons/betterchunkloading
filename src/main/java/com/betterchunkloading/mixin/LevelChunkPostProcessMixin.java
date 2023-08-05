@@ -31,7 +31,7 @@ public abstract class LevelChunkPostProcessMixin extends ChunkAccess
 {
     @Shadow
     @Final
-    private Level level;
+    public Level level;
 
     public LevelChunkPostProcessMixin(
       final ChunkPos p_187621_,

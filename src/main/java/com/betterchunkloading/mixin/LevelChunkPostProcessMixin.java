@@ -3,6 +3,7 @@ package com.betterchunkloading.mixin;
 import com.betterchunkloading.BetterChunkLoading;
 import com.betterchunkloading.event.EventHandler;
 import net.minecraft.core.Registry;
+import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelHeightAccessor;
@@ -22,14 +23,17 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.Arrays;
 
+import static com.betterchunkloading.BetterChunkLoading.TICKET_1min;
+import static com.betterchunkloading.BetterChunkLoading.TICKET_2min;
+
 @Mixin(LevelChunk.class)
-public abstract class LevelChunkMixin extends ChunkAccess
+public abstract class LevelChunkPostProcessMixin extends ChunkAccess
 {
     @Shadow
     @Final
     private Level level;
 
-    public LevelChunkMixin(
+    public LevelChunkPostProcessMixin(
       final ChunkPos p_187621_,
       final UpgradeData p_187622_,
       final LevelHeightAccessor p_187623_,
@@ -44,10 +48,21 @@ public abstract class LevelChunkMixin extends ChunkAccess
     @Inject(method = "postProcessGeneration", at = @At("HEAD"))
     private void onPost(final CallbackInfo ci)
     {
-        if (BetterChunkLoading.config.getCommonConfig().enableFasterChunkLoading)
+        if (BetterChunkLoading.config.getCommonConfig().enableFasterChunkLoading && postProcessing.length != 0 && level.getServer() != null)
         {
-            EventHandler.delayedLoading.put(new EventHandler.ChunkInfo(level.getServer().getTickCount(), chunkPos, level), postProcessing.clone());
-            Arrays.fill(this.postProcessing, null);
+            for (final it.unimi.dsi.fastutil.shorts.ShortList shorts : postProcessing)
+            {
+                if (shorts != null && !shorts.isEmpty())
+                {
+                    ((ServerChunkCache) level.getChunkSource()).addRegionTicket(TICKET_2min,
+                      chunkPos,
+                      1,
+                      chunkPos);
+                    EventHandler.delayedLoading.put(new EventHandler.ChunkInfo(level.getServer().getTickCount(), chunkPos, level), postProcessing);
+                    Arrays.fill(this.postProcessing, null);
+                    break;
+                }
+            }
         }
     }
 }

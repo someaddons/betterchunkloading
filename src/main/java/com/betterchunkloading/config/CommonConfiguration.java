@@ -10,8 +10,7 @@ public class CommonConfiguration implements ICommonConfig
     public int     predictionarea            = 7;
 
     public boolean enableLazyChunkloading = true;
-    public double  lazyloadingspeed       = 0.6;
-
+    public double  lazyloadingspeed       = 0.7;
 
     public boolean  enableFasterChunkLoading       = true;
     public boolean  debugLogging       = false;
@@ -30,7 +29,7 @@ public class CommonConfiguration implements ICommonConfig
         root.add("enablePrediction", entry3);
 
         final JsonObject entry = new JsonObject();
-        entry.addProperty("desc:", "Offset to the distance(based on simulation distance) at which chunk prediction starts pre-loading: default:-2 chunks");
+        entry.addProperty("desc:", "Offset to the distance(based on simulation distance) at which chunk prediction starts pre-loading(circular): default:-2 chunks");
         entry.addProperty("predictiondidstanceoffset", predictiondidstanceoffset);
         root.add("predictiondidstanceoffset", entry);
 

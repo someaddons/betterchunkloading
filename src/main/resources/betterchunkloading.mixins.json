@@ -5,10 +5,9 @@
   "refmap": "betterchunkloading.refmap.json",
   "mixinPriority": 200,
   "mixins": [
-    "LevelChunkMixin",
-    "ChunkMapMixin",
+    "LevelChunkPostProcessMixin",
     "DistanceManagerMixin",
-    "PlayerTickMixin"
+    "PlayerChunkDataMixin"
   ],
   "client": [
   ],

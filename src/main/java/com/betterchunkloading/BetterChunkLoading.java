@@ -29,7 +29,7 @@ public class BetterChunkLoading
     public static      CupboardConfig<CommonConfiguration> config = new CupboardConfig<>(MOD_ID, new CommonConfiguration());
     public static       Random                              rand   = new Random();
 
-    public static final TicketType<ChunkPos> TICKET_5min = TicketType.create("betterchunkloading5min", Comparator.comparingLong(ChunkPos::toLong), 20 * 60 * 5);
+    public static final TicketType<ChunkPos> TICKET_2min = TicketType.create("betterchunkloading5min", Comparator.comparingLong(ChunkPos::toLong), 20 * 60 * 2);
     public static final TicketType<ChunkPos> TICKET_1min = TicketType.create("betterchunkloading1min", Comparator.comparingLong(ChunkPos::toLong), 20 * 60 * 1);
 
 

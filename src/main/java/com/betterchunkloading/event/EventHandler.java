@@ -3,6 +3,7 @@ package com.betterchunkloading.event;
 import com.betterchunkloading.BetterChunkLoading;
 import it.unimi.dsi.fastutil.shorts.ShortList;
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
@@ -14,11 +15,12 @@ import net.minecraft.world.level.material.FluidState;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+
+import static com.betterchunkloading.BetterChunkLoading.TICKET_2min;
 
 public class EventHandler
 {
@@ -33,16 +35,21 @@ public class EventHandler
             for (Iterator<Map.Entry<ChunkInfo, ShortList[]>> iterator = delayedLoading.entrySet().iterator(); iterator.hasNext(); )
             {
                 final Map.Entry<ChunkInfo, ShortList[]> dataEntry = iterator.next();
-                if (serverTime - dataEntry.getKey().originalTime > 20 * 60 * 2
-                      || (dataEntry.getKey().level.hasChunk(dataEntry.getKey().pos.x, dataEntry.getKey().pos.z)
-                            && serverTime - dataEntry.getKey().originalTime > 20 * 20
-                            && dataEntry.getKey().level.hasChunk(dataEntry.getKey().pos.x + 1, dataEntry.getKey().pos.z)
-                            && dataEntry.getKey().level.hasChunk(dataEntry.getKey().pos.x, dataEntry.getKey().pos.z + 1)
-                            && dataEntry.getKey().level.hasChunk(dataEntry.getKey().pos.x - 1, dataEntry.getKey().pos.z)
-                            && dataEntry.getKey().level.hasChunk(dataEntry.getKey().pos.x - 1, dataEntry.getKey().pos.z - 1)))
+                if (serverTime - dataEntry.getKey().originalTime > 20 * 5
+                      && dataEntry.getKey().level.hasChunk(dataEntry.getKey().pos.x, dataEntry.getKey().pos.z)
+                      && dataEntry.getKey().level.hasChunk(dataEntry.getKey().pos.x + 1, dataEntry.getKey().pos.z)
+                      && dataEntry.getKey().level.hasChunk(dataEntry.getKey().pos.x, dataEntry.getKey().pos.z + 1)
+                      && dataEntry.getKey().level.hasChunk(dataEntry.getKey().pos.x - 1, dataEntry.getKey().pos.z)
+                      && dataEntry.getKey().level.hasChunk(dataEntry.getKey().pos.x - 1, dataEntry.getKey().pos.z - 1))
                 {
                     applyToChunk(dataEntry);
                     iterator.remove();
+                }
+
+                if (serverTime - dataEntry.getKey().originalTime > 20 * 60 * 2)
+                {
+                    iterator.remove();
+                    return;
                 }
             }
         }
@@ -71,8 +78,15 @@ public class EventHandler
                         dataEntry.getKey().level.setBlock(blockpos, blockstate1, 20);
                     }
                 }
+
+                dataEntry.getValue()[i].clear();
             }
         }
+
+        ((ServerChunkCache) dataEntry.getKey().level.getChunkSource()).removeRegionTicket(TICKET_2min,
+          dataEntry.getKey().pos,
+          1,
+          dataEntry.getKey().pos);
     }
 
     public static class ChunkInfo

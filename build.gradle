@@ -1,0 +1,93 @@
+plugins {
+    id 'fabric-loom' version "${loom_version}"
+    id 'maven-publish'
+    id 'io.github.juuxel.loom-quiltflower' version "${quiltflower_version}"
+    id 'com.github.johnrengelman.shadow' version '7.1.2' apply false
+}
+
+quiltflower {
+    addToRuntimeClasspath.set(true)
+}
+
+var ENV = System.getenv()
+
+if (ENV.MCMC_BUILD_NUMBER) {
+    version = "${mod_version}.${ENV.MCMC_BUILD_NUMBER}"
+} else {
+    version = project.minecraft_version + "-" + project.mod_version
+}
+
+group = project.maven_group
+
+loom {
+    accessWidenerPath = file("src/main/resources/${project.archives_base_name}.accessWidener")
+}
+
+repositories {
+    mavenLocal()
+    flatDir { dirs 'libs' }
+    mavenCentral()
+
+    maven {
+        url "https://www.cursemaven.com"
+        content {
+            includeGroup "curse.maven"
+        }
+    }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings loom.officialMojangMappings()
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    modImplementation("curse.maven:cupboard-326652:4669189")
+
+}
+
+loom {
+    runs {
+        client {
+            programArg '--username=Dev'
+            programArg '--uuid=123123123123123'
+            vmArg '-Dmixin.debug=true'
+        }
+        server {
+            runDir = "runserver"
+        }
+    }
+}
+
+processResources {
+    inputs.property "version", project.version
+    filteringCharset "UTF-8"
+
+    filesMatching("fabric.mod.json") {
+        expand "version": project.version
+    }
+}
+
+def targetJavaVersion = 17
+tasks.withType(JavaCompile).configureEach {
+    it.options.encoding = "UTF-8"
+    if (targetJavaVersion >= 10 || JavaVersion.current().isJava10Compatible()) {
+        it.options.release = targetJavaVersion
+    }
+}
+
+java {
+    def javaVersion = JavaVersion.toVersion(targetJavaVersion)
+    if (JavaVersion.current() < javaVersion) {
+        toolchain.languageVersion = JavaLanguageVersion.of(targetJavaVersion)
+    }
+    archivesBaseName =  project.archives_base_name + "-fabric"
+    withSourcesJar()
+}
+
+publishing {
+    publications {
+        register('mavenJava', MavenPublication) {
+            artifact jar
+        }
+    }
+}

@@ -80,14 +80,14 @@ public class PlayerChunkData
 
         lastChunk = player.chunkPosition();
 
-        if (BetterChunkLoading.config.getCommonConfig().enablePrediction)
-        {
-            checkPrediction(player);
-        }
-
         if (BetterChunkLoading.config.getCommonConfig().enableLazyChunkloading)
         {
             updateSlowAvgChunkPos(player);
+        }
+
+        if (BetterChunkLoading.config.getCommonConfig().enablePrediction)
+        {
+            checkPrediction(player);
         }
     }
 
@@ -198,6 +198,12 @@ public class PlayerChunkData
 
         ChunkPos newOldest = new ChunkPos(avgOldest);
         ChunkPos newNewest = new ChunkPos(avgNewest);
+
+        // TODO: Test if lazy update is often enough for prediction loading too, to reduce frequency even more
+        /* if (lazyLoadingAvgChunkpos != null && lazyLoadingAvgChunkpos.equals(lazyLoadingLastTicketPos))
+        {
+            return;
+        }*/
 
         if (!newNewest.equals(predictionNewestPositionsAvg) || !newOldest.equals(predictionOldestPositionsAvg))
         {

@@ -32,7 +32,7 @@ public abstract class PlayerRemoveListener extends LivingEntity
             final ChunkPos lastPos = data.getLazyLoadingLastTicketPos();
             if (lastPos != null)
             {
-                ((IDistanceManagerCleanup) ((ServerChunkCache) level.getChunkSource()).distanceManager).betterchunkloading$cleanPlayer(data);
+                ((IDistanceManagerCleanup) ((ServerChunkCache) level.getChunkSource()).chunkMap.getDistanceManager()).betterchunkloading$cleanPlayer(data);
             }
         }
     }

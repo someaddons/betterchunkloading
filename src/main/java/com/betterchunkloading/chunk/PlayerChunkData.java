@@ -24,9 +24,9 @@ public class PlayerChunkData
      * Tracking for the last six chunks visited
      */
     private BlockPos[] predictionLastChunkpositions = new BlockPos[6];
-    private int      predictionIndex              = 0;
-    private ChunkPos predictionOldestPositionsAvg = ChunkPos.ZERO;
-    private ChunkPos predictionNewestPositionsAvg = ChunkPos.ZERO;
+    private int        predictionIndex              = 0;
+    private ChunkPos   predictionOldestPositionsAvg = ChunkPos.ZERO;
+    private ChunkPos   predictionNewestPositionsAvg = ChunkPos.ZERO;
 
     /**
      * Last predictive chunk ticket position and level
@@ -38,9 +38,9 @@ public class PlayerChunkData
      * Tracking for the last slow average chunk pos
      */
     private BlockPos[] lazyLoadingLastChunkPositions = new BlockPos[6];
-    private int      lazyLoadingIndex       = 0;
-    private ChunkPos lazyLoadingAvgChunkpos   = null;
-    private ChunkPos lazyLoadingLastTicketPos = null;
+    private int        lazyLoadingIndex              = 0;
+    private ChunkPos   lazyLoadingAvgChunkpos        = null;
+    private ChunkPos   lazyLoadingLastTicketPos      = null;
 
     public void onChunkChanged(ServerPlayer player)
     {

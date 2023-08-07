@@ -1,5 +1,6 @@
 package com.betterchunkloading.mixin;
 
+import com.betterchunkloading.chunk.IDistanceManagerCleanup;
 import com.betterchunkloading.chunk.IPlayerDataPlayer;
 import com.betterchunkloading.chunk.PlayerChunkData;
 import net.minecraft.core.SectionPos;
@@ -11,12 +12,13 @@ import net.minecraft.world.level.ChunkPos;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(DistanceManager.class)
-public abstract class DistanceManagerMixin
+public abstract class DistanceManagerMixin implements IDistanceManagerCleanup
 {
     @Shadow
     @Final
@@ -48,6 +50,8 @@ public abstract class DistanceManagerMixin
             return;
         }
 
+        betterchunkloading$cleanPlayer(data);
+
         if (newTicketPos == null)
         {
             newTicketPos = player.chunkPosition();
@@ -78,10 +82,19 @@ public abstract class DistanceManagerMixin
             return;
         }
 
+        betterchunkloading$cleanPlayer(data);
+    }
+
+    @Override
+    public void betterchunkloading$cleanPlayer(final PlayerChunkData data)
+    {
         if (data.getLazyLoadingLastTicketPos() != null)
         {
             this.playerTicketManager.update(data.getLazyLoadingLastTicketPos().toLong(), Integer.MAX_VALUE, false);
-            this.tickingTicketsTracker.removeTicket(TicketType.PLAYER, data.getLazyLoadingLastTicketPos(), this.getPlayerTicketLevel(), data.getLazyLoadingLastTicketPos());
+            this.tickingTicketsTracker.removeTicket(TicketType.PLAYER,
+              data.getLazyLoadingLastTicketPos(),
+              this.getPlayerTicketLevel(),
+              data.getLazyLoadingLastTicketPos());
 
             data.setLazyLoadingLastTicketPos(null);
         }

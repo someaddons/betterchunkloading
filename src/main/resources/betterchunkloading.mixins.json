@@ -6,7 +6,8 @@
   "mixins": [
     "LevelChunkPostProcessMixin",
     "DistanceManagerMixin",
-    "PlayerChunkDataMixin"
+    "PlayerChunkDataMixin",
+    "PlayerRemoveListener"
   ],
   "client": [
   ],

@@ -14,6 +14,7 @@ import net.minecraft.world.level.chunk.ProtoChunk;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.server.ServerLifecycleHooks;
 
 import java.util.Iterator;
 import java.util.Map;
@@ -31,7 +32,7 @@ public class EventHandler
     {
         if (event.phase == TickEvent.Phase.END)
         {
-            long serverTime = event.getServer().getTickCount();
+            long serverTime = ServerLifecycleHooks.getCurrentServer().getTickCount();
             for (Iterator<Map.Entry<ChunkInfo, ShortList[]>> iterator = delayedLoading.entrySet().iterator(); iterator.hasNext(); )
             {
                 final Map.Entry<ChunkInfo, ShortList[]> dataEntry = iterator.next();

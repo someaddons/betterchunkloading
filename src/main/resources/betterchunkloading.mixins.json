@@ -8,7 +8,7 @@
     "LevelChunkPostProcessMixin",
     "DistanceManagerMixin",
     "PlayerChunkDataMixin",
-    "PlayerRemoveListener"
+    "PlayerTicketTrackerMixin"
   ],
   "client": [
   ],

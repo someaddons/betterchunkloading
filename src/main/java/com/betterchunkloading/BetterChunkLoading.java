@@ -5,6 +5,7 @@ import com.betterchunkloading.event.EventHandler;
 import com.cupboard.config.CupboardConfig;
 import net.minecraft.server.level.TicketType;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.IExtensionPoint;
 import net.minecraftforge.fml.ModLoadingContext;
@@ -39,6 +40,13 @@ public class BetterChunkLoading
         Mod.EventBusSubscriber.Bus.FORGE.bus().get().register(EventHandler.class);
         FMLJavaModLoadingContext.get().getModEventBus().addListener(this::setup);
         FMLJavaModLoadingContext.get().getModEventBus().addListener(this::clientSetup);
+        Mod.EventBusSubscriber.Bus.FORGE.bus().get().addListener(this::commandRegister);
+    }
+
+    @SubscribeEvent
+    public void commandRegister(RegisterCommandsEvent event)
+    {
+        event.getDispatcher().register(new Command().build());
     }
 
     @SubscribeEvent

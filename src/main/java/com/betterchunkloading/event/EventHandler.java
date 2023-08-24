@@ -1,9 +1,17 @@
 package com.betterchunkloading.event;
 
+import com.betterchunkloading.BetterChunkLoading;
+import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.shorts.ShortList;
+import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerChunkCache;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.Ticket;
+import net.minecraft.server.level.TicketType;
+import net.minecraft.util.SortedArraySet;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
@@ -37,11 +45,47 @@ public class EventHandler {
                 applyToChunk(dataEntry);
                 iterator.remove();
             }
+        }
+    }
 
-            if (serverTime - dataEntry.getKey().originalTime > 20 * 60 * 2) {
-                iterator.remove();
-                return;
+    public static void printPlayerTickets(CommandSourceStack commandSourceStack)
+    {
+        for (final ServerLevel level : commandSourceStack.getServer().getAllLevels())
+        {
+            level.getChunkSource().distanceManager.runAllUpdates(level.getChunkSource().chunkMap);
+
+            int playerTickets = 0;
+
+            for (final Long2ObjectMap.Entry<SortedArraySet<Ticket<?>>> entry : level.getChunkSource().distanceManager.tickets.long2ObjectEntrySet())
+            {
+                for (final Ticket<?> ticket : entry.getValue())
+                {
+                    if (ticket != null && ticket.getType() == TicketType.PLAYER)
+                    {
+                        playerTickets++;
+                    }
+                }
             }
+
+            commandSourceStack.sendSystemMessage(Component.literal("Dimension:" + level.dimension().location().toString()));
+            commandSourceStack.sendSystemMessage(Component.literal("Player tickets(viewdistance):" + playerTickets));
+            BetterChunkLoading.LOGGER.warn("Dimension:" + level.dimension().location().toString());
+            BetterChunkLoading.LOGGER.warn("Player tickets(viewdistance):" + playerTickets);
+
+            playerTickets = 0;
+            for (final Long2ObjectMap.Entry<SortedArraySet<Ticket<?>>> entry : level.getChunkSource().distanceManager.tickingTicketsTracker.tickets.long2ObjectEntrySet())
+            {
+                for (final Ticket<?> ticket : entry.getValue())
+                {
+                    if (ticket != null && ticket.getType() == TicketType.PLAYER)
+                    {
+                        playerTickets++;
+                    }
+                }
+            }
+
+            commandSourceStack.sendSystemMessage(Component.literal("Player ticking(sim distance) tickets:" + playerTickets));
+            BetterChunkLoading.LOGGER.warn("Player ticking(sim distance) tickets:" + playerTickets);
         }
     }
 

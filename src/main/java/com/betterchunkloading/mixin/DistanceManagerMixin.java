@@ -76,6 +76,7 @@ public abstract class DistanceManagerMixin implements IDistanceManager
 
     /**
      * Inject at head to make sure it runs on every chunk pos change
+     *
      * @param chunkSection
      * @param player
      * @param ci
@@ -102,6 +103,7 @@ public abstract class DistanceManagerMixin implements IDistanceManager
 
     /**
      * Prevent vanilla ticket changes as we handle them ourselves
+     *
      * @param p_140829_
      * @param p_140830_
      * @param ci

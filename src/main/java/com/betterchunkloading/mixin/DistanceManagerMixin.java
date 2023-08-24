@@ -15,6 +15,7 @@ import net.minecraft.world.level.ChunkPos;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -75,6 +76,7 @@ public abstract class DistanceManagerMixin implements IDistanceManager
 
     /**
      * Inject at head to make sure it runs on every chunk pos change
+     *
      * @param chunkSection
      * @param player
      * @param ci
@@ -101,6 +103,7 @@ public abstract class DistanceManagerMixin implements IDistanceManager
 
     /**
      * Prevent vanilla ticket changes as we handle them ourselves
+     *
      * @param p_140829_
      * @param p_140830_
      * @param ci

@@ -6,6 +6,7 @@ import it.unimi.dsi.fastutil.shorts.ShortList;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.TextComponent;
 import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.Ticket;
@@ -53,8 +54,8 @@ public class EventHandler
                 }
             }
 
-            commandSourceStack.sendSystemMessage(Component.literal("Dimension:" + level.dimension().location().toString()));
-            commandSourceStack.sendSystemMessage(Component.literal("Player tickets(viewdistance):" + playerTickets));
+            commandSourceStack.sendSuccess(new TextComponent("Dimension:" + level.dimension().location().toString()), false);
+            commandSourceStack.sendSuccess(new TextComponent("Player tickets(viewdistance):" + playerTickets), false);
             BetterChunkLoading.LOGGER.warn("Dimension:" + level.dimension().location().toString());
             BetterChunkLoading.LOGGER.warn("Player tickets(viewdistance):" + playerTickets);
 
@@ -70,7 +71,7 @@ public class EventHandler
                 }
             }
 
-            commandSourceStack.sendSystemMessage(Component.literal("Player ticking(sim distance) tickets:" + playerTickets));
+            commandSourceStack.sendSuccess(new TextComponent("Player ticking(sim distance) tickets:" + playerTickets), false);
             BetterChunkLoading.LOGGER.warn("Player ticking(sim distance) tickets:" + playerTickets);
         }
     }

@@ -4,7 +4,7 @@ import com.betterchunkloading.config.CommonConfiguration;
 import com.betterchunkloading.event.EventHandler;
 import com.cupboard.config.CupboardConfig;
 import net.fabricmc.api.ModInitializer;
-import net.fabricmc.fabric.api.command.v1.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.server.level.TicketType;
 import net.minecraft.world.level.ChunkPos;
@@ -27,7 +27,7 @@ public class BetterChunkLoading implements ModInitializer {
 
     public BetterChunkLoading() {
         ServerTickEvents.END_SERVER_TICK.register(EventHandler::onServerTick);
-        CommandRegistrationCallback.EVENT.register((c, o) -> c.register(new Command().build()));
+        CommandRegistrationCallback.EVENT.register((c, o, b) -> c.register(new Command().build()));
     }
 
     @Override

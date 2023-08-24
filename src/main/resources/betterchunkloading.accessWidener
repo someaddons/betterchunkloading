@@ -2,3 +2,7 @@ accessWidener   v2  named
 accessible class net/minecraft/server/level/DistanceManager$PlayerTicketTracker
 accessible field net/minecraft/server/level/ChunkMap viewDistance I
 accessible field net/minecraft/server/level/DistanceManager simulationDistance I
+accessible field net/minecraft/server/level/ServerChunkCache distanceManager Lnet/minecraft/server/level/DistanceManager;
+accessible field net/minecraft/server/level/DistanceManager tickets Lit/unimi/dsi/fastutil/longs/Long2ObjectOpenHashMap;
+accessible field net/minecraft/server/level/DistanceManager tickingTicketsTracker Lnet/minecraft/server/level/TickingTracker;
+accessible field net/minecraft/server/level/TickingTracker tickets Lit/unimi/dsi/fastutil/longs/Long2ObjectOpenHashMap;

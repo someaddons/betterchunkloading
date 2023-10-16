@@ -44,8 +44,8 @@ public class PlayerChunkData {
     private ChunkPos lazyLoadingLastTicketPos = null;
 
     public void onChunkChanged(ServerPlayer player) {
-        if (!player.level.dimension().equals(lastLevel)) {
-            lastLevel = player.level.dimension();
+        if (!player.level().dimension().equals(lastLevel)) {
+            lastLevel = player.level().dimension();
 
             predictionLastChunkpositions = new BlockPos[6];
             predictionIndex = 0;
@@ -93,7 +93,7 @@ public class PlayerChunkData {
      */
     private void updateSlowAvgChunkPos(final ServerPlayer player) {
         final int cacheSize =
-                Math.max(1, (int) (((ServerChunkCache) player.level.getChunkSource()).chunkMap.viewDistance / CommonConfiguration.config.getCommonConfig().lazyloadingspeed));
+                Math.max(1, (int) (((ServerChunkCache) player.level().getChunkSource()).chunkMap.viewDistance / CommonConfiguration.config.getCommonConfig().lazyloadingspeed));
         if (lazyLoadingLastChunkPositions.length != cacheSize) {
             BlockPos[] newArray = new BlockPos[cacheSize];
             for (int i = 0; i < Math.min(cacheSize, lazyLoadingLastChunkPositions.length); i++) {
@@ -191,7 +191,7 @@ public class PlayerChunkData {
 
             final Vec3 direction = Vec3.atBottomCenterOf(avgOldest).subtract(Vec3.atBottomCenterOf(avgNewest)).reverse();
             Vec3 currentpos = Vec3.atBottomCenterOf(avgNewest);
-            currentpos = currentpos.add(direction.scale((((ServerChunkCache) player.level.getChunkSource()).chunkMap.getDistanceManager().simulationDistance
+            currentpos = currentpos.add(direction.scale((((ServerChunkCache) player.level().getChunkSource()).chunkMap.getDistanceManager().simulationDistance
                     + CommonConfiguration.config.getCommonConfig().predictiondidstanceoffset) / 3.0));
 
             // Current
@@ -207,12 +207,12 @@ public class PlayerChunkData {
                                 + player.chunkPosition());
             }
 
-            ((ServerChunkCache) player.level.getChunkSource()).addRegionTicket(TICKET_1min,
+            ((ServerChunkCache) player.level().getChunkSource()).addRegionTicket(TICKET_1min,
                     currentChunk, CommonConfiguration.config.getCommonConfig().predictionarea,
                     currentChunk);
 
             if (!lastChunkTicket.equals(ChunkPos.ZERO)) {
-                ((ServerChunkCache) player.level.getChunkSource()).removeRegionTicket(TICKET_1min, lastChunkTicket, lastChunkTicketLevel, lastChunkTicket);
+                ((ServerChunkCache) player.level().getChunkSource()).removeRegionTicket(TICKET_1min, lastChunkTicket, lastChunkTicketLevel, lastChunkTicket);
             }
             lastChunkTicket = currentChunk;
             lastChunkTicketLevel = CommonConfiguration.config.getCommonConfig().predictionarea;

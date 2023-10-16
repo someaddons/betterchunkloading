@@ -1,6 +1,7 @@
 package com.betterchunkloading.mixin;
 
 import com.betterchunkloading.BetterChunkLoading;
+import com.betterchunkloading.config.CommonConfiguration;
 import com.betterchunkloading.event.EventHandler;
 import net.minecraft.core.Registry;
 import net.minecraft.server.level.ServerChunkCache;
@@ -47,7 +48,7 @@ public abstract class LevelChunkPostProcessMixin extends ChunkAccess
     @Inject(method = "postProcessGeneration", at = @At("HEAD"))
     private void onPost(final CallbackInfo ci)
     {
-        if (BetterChunkLoading.config.getCommonConfig().enableFasterChunkLoading && postProcessing.length != 0 && level.getServer() != null)
+        if (CommonConfiguration.config.getCommonConfig().enableFasterChunkLoading && postProcessing.length != 0 && level.getServer() != null)
         {
             for (final it.unimi.dsi.fastutil.shorts.ShortList shorts : postProcessing)
             {

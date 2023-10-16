@@ -1,10 +1,13 @@
 package com.betterchunkloading.config;
 
+import com.cupboard.config.CupboardConfig;
 import com.cupboard.config.ICommonConfig;
 import com.google.gson.JsonObject;
 
 public class CommonConfiguration implements ICommonConfig
 {
+    public static CupboardConfig<CommonConfiguration> config = new CupboardConfig<>("betterchunkloading", new CommonConfiguration());
+
     public boolean enablePrediction          = true;
     public int     predictiondidstanceoffset = -2;
     public int     predictionarea            = 7;

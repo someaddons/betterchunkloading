@@ -1,8 +1,6 @@
 package com.betterchunkloading;
 
-import com.betterchunkloading.config.CommonConfiguration;
 import com.betterchunkloading.event.EventHandler;
-import com.cupboard.config.CupboardConfig;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
@@ -19,7 +17,6 @@ public class BetterChunkLoading implements ModInitializer {
 
     public static final String MOD_ID = "betterchunkloading";
     public static final Logger LOGGER = LogManager.getLogger();
-    public static CupboardConfig<CommonConfiguration> config = new CupboardConfig<>(MOD_ID, new CommonConfiguration());
     public static Random rand = new Random();
 
     public static final TicketType<ChunkPos> TICKET_2min = TicketType.create("betterchunkloading5min", Comparator.comparingLong(ChunkPos::toLong), 20 * 60 * 2);

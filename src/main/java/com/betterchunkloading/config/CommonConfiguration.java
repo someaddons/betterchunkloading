@@ -24,7 +24,7 @@ public class CommonConfiguration implements ICommonConfig
         final JsonObject root = new JsonObject();
 
         final JsonObject entry3 = new JsonObject();
-        entry3.addProperty("desc:", "Enables predictive chunkloading, which predicts player movement and preloads an area infront: default:true");
+        entry3.addProperty("desc:", "Enables predictive chunkloading, which predicts player movement and preloads an area in movement direction: default:true");
         entry3.addProperty("enablePrediction", enablePrediction);
         root.add("enablePrediction", entry3);
 
@@ -46,7 +46,7 @@ public class CommonConfiguration implements ICommonConfig
 
         final JsonObject entry6 = new JsonObject();
         entry6.addProperty("desc:",
-          "Set the speed of lazy loading, increasing this makes the lazy chunk loading gets less lazy and react to player position changes faster: default:0.6");
+          "Set the speed of lazy loading, increasing this makes the lazy chunk loading gets less lazy and react to player position changes faster: default:0.7");
         entry6.addProperty("lazyloadingspeed", lazyloadingspeed);
         root.add("lazyloadingspeed", entry6);
 
@@ -56,7 +56,7 @@ public class CommonConfiguration implements ICommonConfig
         root.add("enableFasterChunkLoading", entry7);
 
         final JsonObject entry8 = new JsonObject();
-        entry8.addProperty("desc:", "Enables debug logging for all features: default:false");
+        entry8.addProperty("desc:", "Enables debug logging to show chunk loading changes: default:false");
         entry8.addProperty("debugLogging", debugLogging);
         root.add("debugLogging", entry8);
 

@@ -1,15 +1,25 @@
 package com.betterchunkloading.chunk;
 
 import com.betterchunkloading.BetterChunkLoading;
+import com.mojang.datafixers.util.Either;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerChunkCache;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.chunk.storage.IOWorker;
+import net.minecraft.world.level.chunk.storage.RegionFileStorage;
 import net.minecraft.world.phys.Vec3;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+
 import static com.betterchunkloading.BetterChunkLoading.TICKET_1min;
+import static com.betterchunkloading.BetterChunkLoading.TICKET_15s;
 
 public class PlayerChunkData
 {
@@ -44,6 +54,11 @@ public class PlayerChunkData
 
     public void onChunkChanged(ServerPlayer player)
     {
+        if (player == null)
+        {
+            return;
+        }
+
         if (!player.level().dimension().equals(lastLevel))
         {
             lastLevel = player.level().dimension();
@@ -230,17 +245,67 @@ public class PlayerChunkData
                     + player.chunkPosition());
             }
 
-            ((ServerChunkCache) player.level().getChunkSource()).addRegionTicket(TICKET_1min,
+            ServerChunkCache chunkSource = ((ServerChunkCache) ((ServerLevel)player.level()).getChunkSource());
+
+            chunkSource.addRegionTicket(TICKET_1min,
               currentChunk,
               BetterChunkLoading.config.getCommonConfig().predictionarea,
               currentChunk);
 
             if (!lastChunkTicket.equals(ChunkPos.ZERO))
             {
-                ((ServerChunkCache) player.level().getChunkSource()).removeRegionTicket(TICKET_1min, lastChunkTicket, lastChunkTicketLevel, lastChunkTicket);
+                chunkSource.removeRegionTicket(TICKET_1min, lastChunkTicket, lastChunkTicketLevel, lastChunkTicket);
             }
             lastChunkTicket = currentChunk;
             lastChunkTicketLevel = BetterChunkLoading.config.getCommonConfig().predictionarea;
+
+            // Far area- pregen to make sure chunks generate in time
+            currentpos = currentpos.add(direction.scale((((ServerChunkCache) player.level().getChunkSource()).chunkMap.getDistanceManager().simulationDistance
+                                                           + BetterChunkLoading.config.getCommonConfig().predictiondidstanceoffset) / 3.0));
+
+            final ChunkPos currentChunkFar = new ChunkPos((int) currentpos.x >> 4, (int) currentpos.z >> 4);
+
+            final RegionFileStorage storage = ((IOWorker) chunkSource.chunkMap.chunkScanner()).storage;
+            final int pregenSize = BetterChunkLoading.config.getCommonConfig().predictionarea * 2;
+            CompletableFuture<List<ChunkPos>> future = ((IOWorker) chunkSource.chunkMap.chunkScanner()).submitTask(() -> {
+                List<ChunkPos> missing = new ArrayList<>();
+                for (int i = -pregenSize; i < pregenSize; i++)
+                {
+                    for (int j = -pregenSize; j < pregenSize; j++)
+                    {
+                        if (Math.sqrt(i * i + j*j) > pregenSize)
+                        {
+                            continue;
+                        }
+
+                        ChunkPos current = new ChunkPos(currentChunkFar.x + i, currentChunkFar.z + j);
+                        try
+                        {
+                            if (!storage.getRegionFile(current).hasChunk(current))
+                            {
+                                missing.add(current);
+                            }
+                        }
+                        catch (IOException e)
+                        {
+                            missing.add(current);
+                        }
+                    }
+                }
+                return Either.left(missing);
+            });
+            future.thenApplyAsync(list -> {
+                for(final ChunkPos pos:list)
+                {
+                    chunkSource.addRegionTicket(TICKET_15s,
+                      pos,
+                      0,
+                      pos);
+                }
+
+                //BetterChunkLoading.LOGGER.warn("Adding tickets to:"+list.size()+" chunks");
+                return null;
+            }, player.level().getServer());
         }
     }
 }

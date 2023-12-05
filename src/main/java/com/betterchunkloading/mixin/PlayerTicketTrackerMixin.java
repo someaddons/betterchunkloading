@@ -14,7 +14,7 @@ public abstract class PlayerTicketTrackerMixin extends ChunkTracker
     /**
      * References the outer class this
      */
-    @Shadow
+    @Shadow(aliases = "field_17463")
     @Final
     DistanceManager this$0;
 

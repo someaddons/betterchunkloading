@@ -32,6 +32,7 @@ public class BetterChunkLoading
 
     public static final TicketType<ChunkPos> TICKET_2min = TicketType.create("betterchunkloading5min", Comparator.comparingLong(ChunkPos::toLong), 20 * 60 * 2);
     public static final TicketType<ChunkPos> TICKET_1min = TicketType.create("betterchunkloading1min", Comparator.comparingLong(ChunkPos::toLong), 20 * 60 * 1);
+    public static final TicketType<ChunkPos> TICKET_15s  = TicketType.create("betterchunkloading15s", Comparator.comparingLong(ChunkPos::toLong), 20 * 15 * 1);
 
 
     public BetterChunkLoading()

@@ -266,7 +266,7 @@ public class PlayerChunkData
             final ChunkPos currentChunkFar = new ChunkPos((int) currentpos.x >> 4, (int) currentpos.z >> 4);
 
             final RegionFileStorage storage = ((IOWorker) chunkSource.chunkMap.chunkScanner()).storage;
-            final int pregenSize = BetterChunkLoading.config.getCommonConfig().predictionarea * 2;
+            final int pregenSize = BetterChunkLoading.config.getCommonConfig().preGenArea;
             CompletableFuture<List<ChunkPos>> future = ((IOWorker) chunkSource.chunkMap.chunkScanner()).submitTask(() -> {
                 List<ChunkPos> missing = new ArrayList<>();
                 for (int i = -pregenSize; i < pregenSize; i++)

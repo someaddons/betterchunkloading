@@ -79,6 +79,12 @@ public class EventHandler
     {
         if (event.phase == TickEvent.Phase.END)
         {
+            BetterChunkLoading.player_modifier = (int) (1 + event.getServer().getPlayerCount() * 0.3);
+            if (event.getServer().getPlayerCount() == 0)
+            {
+                BetterChunkLoading.player_modifier = 0;
+            }
+
             long serverTime = event.getServer().getTickCount();
             for (Iterator<Map.Entry<ChunkInfo, ShortList[]>> iterator = delayedLoading.entrySet().iterator(); iterator.hasNext(); )
             {

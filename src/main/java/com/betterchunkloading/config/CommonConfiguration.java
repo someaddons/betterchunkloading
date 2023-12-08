@@ -8,6 +8,8 @@ public class CommonConfiguration implements ICommonConfig
     public boolean enablePrediction          = true;
     public int     predictiondidstanceoffset = -2;
     public int     predictionarea            = 7;
+    public boolean     enablePreGen            = true;
+    public int     preGenArea            = 7;
 
     public boolean enableLazyChunkloading = true;
     public double  lazyloadingspeed       = 0.7;
@@ -38,6 +40,16 @@ public class CommonConfiguration implements ICommonConfig
         entry2.addProperty("predictionarea", predictionarea);
         root.add("predictionarea", entry2);
 
+        final JsonObject entry9 = new JsonObject();
+        entry9.addProperty("desc:", "Enables predictive, async pre-gen far ahead of the player, to generate nonexisting chunks early so they load in time, requires enablePrediction: default:true");
+        entry9.addProperty("enablePreGen", enablePreGen);
+        root.add("enablePreGen", entry9);
+
+        final JsonObject entry10 = new JsonObject();
+        entry10.addProperty("desc:", "Size of the area marked for pregeneration: default:7 chunks, min 1, max 32");
+        entry10.addProperty("preGenArea", preGenArea);
+        root.add("preGenArea", entry10);
+
         final JsonObject entry5 = new JsonObject();
         entry5.addProperty("desc:",
           "Enables lazy chunkloading around the player, which makes the area loaded directly around the player react more slowly to player position changes.(Improves server performance, less chunks are loaded/unlaoded frequently) : default:true");
@@ -67,9 +79,11 @@ public class CommonConfiguration implements ICommonConfig
     {
         predictiondidstanceoffset = data.get("predictiondidstanceoffset").getAsJsonObject().get("predictiondidstanceoffset").getAsInt();
         predictionarea = Math.max(2, Math.min(32, data.get("predictionarea").getAsJsonObject().get("predictionarea").getAsInt()));
+        preGenArea = Math.max(1, Math.min(32, data.get("preGenArea").getAsJsonObject().get("preGenArea").getAsInt()));
         enablePrediction = data.get("enablePrediction").getAsJsonObject().get("enablePrediction").getAsBoolean();
         enableLazyChunkloading = data.get("enableLazyChunkloading").getAsJsonObject().get("enableLazyChunkloading").getAsBoolean();
         enableFasterChunkLoading = data.get("enableFasterChunkLoading").getAsJsonObject().get("enableFasterChunkLoading").getAsBoolean();
+        enablePreGen = data.get("enablePreGen").getAsJsonObject().get("enablePreGen").getAsBoolean();
         lazyloadingspeed = Math.max(0.1, data.get("lazyloadingspeed").getAsJsonObject().get("lazyloadingspeed").getAsDouble());
         debugLogging = data.get("debugLogging").getAsJsonObject().get("debugLogging").getAsBoolean();
     }

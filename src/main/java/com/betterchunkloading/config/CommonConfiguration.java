@@ -9,7 +9,7 @@ public class CommonConfiguration implements ICommonConfig
     public int     predictiondidstanceoffset = -2;
     public int     predictionarea            = 7;
     public boolean     enablePreGen            = true;
-    public int     preGenArea            = 4;
+    public int     preGenArea            = 7;
 
     public boolean enableLazyChunkloading = true;
     public double  lazyloadingspeed       = 0.7;
@@ -41,12 +41,12 @@ public class CommonConfiguration implements ICommonConfig
         root.add("predictionarea", entry2);
 
         final JsonObject entry9 = new JsonObject();
-        entry9.addProperty("desc:", "Enables predictive pre-gen far ahead of the player, to generate nonexisting chunks early so they load in time, requires enablePrediction: default:true");
+        entry9.addProperty("desc:", "Enables predictive, async pre-gen far ahead of the player, to generate nonexisting chunks early so they load in time, requires enablePrediction: default:true");
         entry9.addProperty("enablePreGen", enablePreGen);
         root.add("enablePreGen", entry9);
 
         final JsonObject entry10 = new JsonObject();
-        entry10.addProperty("desc:", "Size of the area marked for pregeneration: default:4 chunks, min 1, max 32");
+        entry10.addProperty("desc:", "Size of the area marked for pregeneration: default:7 chunks, min 1, max 32");
         entry10.addProperty("preGenArea", preGenArea);
         root.add("preGenArea", entry10);
 

@@ -9,7 +9,8 @@
     "DistanceManagerMixin",
     "PlayerChunkDataMixin",
     "PlayerTicketTrackerMixin",
-    "PersistentEntityDebugMixin"
+    "PersistentEntityDebugMixin",
+    "ChunkTaskPriorityQueueSorterMixin"
   ],
   "client": [
   ],

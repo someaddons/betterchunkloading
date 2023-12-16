@@ -6,3 +6,6 @@ accessible field net/minecraft/server/level/ServerChunkCache distanceManager Lne
 accessible field net/minecraft/server/level/DistanceManager tickets Lit/unimi/dsi/fastutil/longs/Long2ObjectOpenHashMap;
 accessible field net/minecraft/server/level/DistanceManager tickingTicketsTracker Lnet/minecraft/server/level/TickingTracker;
 accessible field net/minecraft/server/level/TickingTracker tickets Lit/unimi/dsi/fastutil/longs/Long2ObjectOpenHashMap;
+accessible field net/minecraft/world/level/chunk/storage/IOWorker storage Lnet/minecraft/world/level/chunk/storage/RegionFileStorage;
+accessible method net/minecraft/world/level/chunk/storage/IOWorker submitTask (Ljava/util/function/Supplier;)Ljava/util/concurrent/CompletableFuture;
+accessible method net/minecraft/world/level/chunk/storage/RegionFileStorage getRegionFile (Lnet/minecraft/world/level/ChunkPos;)Lnet/minecraft/world/level/chunk/storage/RegionFile;

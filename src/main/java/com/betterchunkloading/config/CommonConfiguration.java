@@ -11,6 +11,9 @@ public class CommonConfiguration implements ICommonConfig
     public boolean enablePrediction          = true;
     public int     predictiondidstanceoffset = -2;
     public int     predictionarea            = 7;
+    public boolean     enablePreGen            = true;
+    public int     preGenArea            = 7;
+
 
     public boolean enableLazyChunkloading = true;
     public double  lazyloadingspeed       = 0.7;

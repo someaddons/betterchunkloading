@@ -2,14 +2,24 @@ package com.betterchunkloading.chunk;
 
 import com.betterchunkloading.BetterChunkLoading;
 import com.betterchunkloading.config.CommonConfiguration;
+import com.mojang.datafixers.util.Either;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerChunkCache;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.chunk.storage.IOWorker;
+import net.minecraft.world.level.chunk.storage.RegionFileStorage;
 import net.minecraft.world.phys.Vec3;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+
+import static com.betterchunkloading.BetterChunkLoading.TICKET_15s;
 import static com.betterchunkloading.BetterChunkLoading.TICKET_1min;
 
 public class PlayerChunkData {
@@ -207,7 +217,9 @@ public class PlayerChunkData {
                                 + player.chunkPosition());
             }
 
-            ((ServerChunkCache) player.level().getChunkSource()).addRegionTicket(TICKET_1min,
+            ServerChunkCache chunkSource = ((ServerLevel)player.level()).getChunkSource();
+
+            chunkSource.addRegionTicket(TICKET_1min,
                     currentChunk, CommonConfiguration.config.getCommonConfig().predictionarea,
                     currentChunk);
 
@@ -216,6 +228,59 @@ public class PlayerChunkData {
             }
             lastChunkTicket = currentChunk;
             lastChunkTicketLevel = CommonConfiguration.config.getCommonConfig().predictionarea;
+
+            if (!CommonConfiguration.config.getCommonConfig().enablePreGen)
+            {
+                return;
+            }
+
+            // Far area- pregen to make sure chunks generate in time
+            currentpos = currentpos.add(direction.scale((((ServerChunkCache) player.level().getChunkSource()).chunkMap.getDistanceManager().simulationDistance
+                                                           + CommonConfiguration.config.getCommonConfig().predictiondidstanceoffset) / 3.0));
+
+            final ChunkPos currentChunkFar = new ChunkPos((int) currentpos.x >> 4, (int) currentpos.z >> 4);
+
+            final RegionFileStorage storage = ((IOWorker) chunkSource.chunkMap.chunkScanner()).storage;
+            final int pregenSize = CommonConfiguration.config.getCommonConfig().preGenArea;
+            CompletableFuture<List<ChunkPos>> future = ((IOWorker) chunkSource.chunkMap.chunkScanner()).submitTask(() -> {
+                List<ChunkPos> missing = new ArrayList<>();
+                for (int i = -pregenSize; i < pregenSize; i++)
+                {
+                    for (int j = -pregenSize; j < pregenSize; j++)
+                    {
+                        if (Math.sqrt(i * i + j*j) > pregenSize)
+                        {
+                            continue;
+                        }
+
+                        ChunkPos current = new ChunkPos(currentChunkFar.x + i, currentChunkFar.z + j);
+                        try
+                        {
+                            if (!storage.getRegionFile(current).hasChunk(current))
+                            {
+                                missing.add(current);
+                            }
+                        }
+                        catch (IOException e)
+                        {
+                            missing.add(current);
+                        }
+                    }
+                }
+                return Either.left(missing);
+            });
+            future.thenApplyAsync(list -> {
+                for(final ChunkPos pos:list)
+                {
+                    chunkSource.addRegionTicket(TICKET_15s,
+                      pos,
+                      0,
+                      pos);
+                }
+
+                BetterChunkLoading.LOGGER.warn("Adding tickets to:"+list.size()+" chunks");
+                return null;
+            }, player.level().getServer());
         }
     }
 }

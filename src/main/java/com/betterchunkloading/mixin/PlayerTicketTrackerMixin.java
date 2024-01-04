@@ -8,7 +8,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 
-@Mixin(DistanceManager.PlayerTicketTracker.class)
+@Mixin(value = DistanceManager.PlayerTicketTracker.class, remap = true)
 public abstract class PlayerTicketTrackerMixin extends ChunkTracker
 {
     /**

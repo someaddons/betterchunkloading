@@ -20,7 +20,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(DistanceManager.class)
+@Mixin(value = DistanceManager.class, remap = true)
 public abstract class DistanceManagerMixin implements IDistanceManager
 {
     @Shadow

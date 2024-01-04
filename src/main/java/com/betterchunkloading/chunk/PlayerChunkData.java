@@ -259,6 +259,11 @@ public class PlayerChunkData
             lastChunkTicket = currentChunk;
             lastChunkTicketLevel = BetterChunkLoading.config.getCommonConfig().predictionarea;
 
+            if (!BetterChunkLoading.config.getCommonConfig().enablePreGen)
+            {
+                return;
+            }
+
             // Far area- pregen to make sure chunks generate in time
             currentpos = currentpos.add(direction.scale((((ServerChunkCache) player.level.getChunkSource()).chunkMap.getDistanceManager().simulationDistance
                                                            + BetterChunkLoading.config.getCommonConfig().predictiondidstanceoffset) / 3.0));

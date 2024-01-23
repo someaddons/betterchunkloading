@@ -8,7 +8,10 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ChunkLevel;
+import net.minecraft.server.level.FullChunkStatus;
 import net.minecraft.server.level.ServerChunkCache;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.storage.IOWorker;
 import net.minecraft.world.level.chunk.storage.RegionFileStorage;
@@ -19,6 +22,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 import static com.betterchunkloading.BetterChunkLoading.TICKET_15s;
+import static com.betterchunkloading.BetterChunkLoading.TICKET_1min;
 
 public class Command
 {
@@ -44,7 +48,7 @@ public class Command
                              })))
                  .then(
                    Commands.literal("genChunkAt")
-                     .then(Commands.argument("distance", BlockPosArgument.blockPos())
+                     .then(Commands.argument("position", BlockPosArgument.blockPos())
                              .executes(context ->
                              {
                                  final BlockPos viewDist = BlockPosArgument.getBlockPos(context, "distance");

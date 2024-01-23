@@ -9,9 +9,11 @@
     "DistanceManagerMixin",
     "PlayerChunkDataMixin",
     "PlayerTicketTrackerMixin",
+    "RegionFileStorageMixin",
     "ChunkTaskPriorityQueueSorterMixin"
   ],
   "client": [
+    "OptionsDevMixin"
   ],
   "injectors": {
     "defaultRequire": 1

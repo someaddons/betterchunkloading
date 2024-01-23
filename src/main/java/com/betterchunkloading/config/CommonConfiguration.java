@@ -6,7 +6,6 @@ import com.google.gson.JsonObject;
 public class CommonConfiguration implements ICommonConfig
 {
     public boolean enablePrediction          = true;
-    public int     predictiondidstanceoffset = -2;
     public int     predictionarea            = 7;
     public boolean     enablePreGen            = true;
     public int     preGenArea            = 7;
@@ -14,6 +13,7 @@ public class CommonConfiguration implements ICommonConfig
     public boolean enableLazyChunkloading = true;
     public double  lazyloadingspeed       = 0.7;
 
+    public boolean  enableFasterChunkTasks       = true;
     public boolean  enableFasterChunkLoading       = true;
     public boolean  debugLogging       = false;
 
@@ -29,11 +29,6 @@ public class CommonConfiguration implements ICommonConfig
         entry3.addProperty("desc:", "Enables predictive chunkloading, which predicts player movement and preloads an area in movement direction: default:true");
         entry3.addProperty("enablePrediction", enablePrediction);
         root.add("enablePrediction", entry3);
-
-        final JsonObject entry = new JsonObject();
-        entry.addProperty("desc:", "Offset to the distance(based on simulation distance) at which chunk prediction starts pre-loading(circular): default:-2 chunks");
-        entry.addProperty("predictiondidstanceoffset", predictiondidstanceoffset);
-        root.add("predictiondidstanceoffset", entry);
 
         final JsonObject entry2 = new JsonObject();
         entry2.addProperty("desc:", "Size of the area marked for preloading: default:7 chunks, max: 32, min: 2");
@@ -72,17 +67,22 @@ public class CommonConfiguration implements ICommonConfig
         entry8.addProperty("debugLogging", debugLogging);
         root.add("debugLogging", entry8);
 
+        final JsonObject ENTRY9 = new JsonObject();
+        ENTRY9.addProperty("desc:", "Enables faster chunk tasks: default:true");
+        ENTRY9.addProperty("enableFasterChunkTasks", enableFasterChunkTasks);
+        root.add("enableFasterChunkTasks", ENTRY9);
+
         return root;
     }
 
     public void deserialize(JsonObject data)
     {
-        predictiondidstanceoffset = data.get("predictiondidstanceoffset").getAsJsonObject().get("predictiondidstanceoffset").getAsInt();
         predictionarea = Math.max(2, Math.min(32, data.get("predictionarea").getAsJsonObject().get("predictionarea").getAsInt()));
         preGenArea = Math.max(1, Math.min(32, data.get("preGenArea").getAsJsonObject().get("preGenArea").getAsInt()));
         enablePrediction = data.get("enablePrediction").getAsJsonObject().get("enablePrediction").getAsBoolean();
         enableLazyChunkloading = data.get("enableLazyChunkloading").getAsJsonObject().get("enableLazyChunkloading").getAsBoolean();
         enableFasterChunkLoading = data.get("enableFasterChunkLoading").getAsJsonObject().get("enableFasterChunkLoading").getAsBoolean();
+        enableFasterChunkTasks = data.get("enableFasterChunkTasks").getAsJsonObject().get("enableFasterChunkTasks").getAsBoolean();
         enablePreGen = data.get("enablePreGen").getAsJsonObject().get("enablePreGen").getAsBoolean();
         lazyloadingspeed = Math.max(0.1, data.get("lazyloadingspeed").getAsJsonObject().get("lazyloadingspeed").getAsDouble());
         debugLogging = data.get("debugLogging").getAsJsonObject().get("debugLogging").getAsBoolean();

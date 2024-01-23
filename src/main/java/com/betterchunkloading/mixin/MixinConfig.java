@@ -1,5 +1,6 @@
 package com.betterchunkloading.mixin;
 
+import com.betterchunkloading.BetterChunkLoading;
 import com.betterchunkloading.config.CommonConfiguration;
 import org.objectweb.asm.tree.ClassNode;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
@@ -24,7 +25,7 @@ public class MixinConfig implements IMixinConfigPlugin {
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
         if (mixinClassName.contains("DistanceManagerMixin") || mixinClassName.contains("PlayerTicketTrackerMixin")) {
-            return CommonConfiguration.config.getCommonConfig().enableLazyChunkloading;
+            return BetterChunkLoading.config.getCommonConfig().enableLazyChunkloading;
         }
 
         return true;

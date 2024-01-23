@@ -7,11 +7,10 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ServerChunkCache;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.Ticket;
-import net.minecraft.server.level.TicketType;
+import net.minecraft.server.level.*;
 import net.minecraft.util.SortedArraySet;
+import net.minecraft.util.thread.ProcessorHandle;
+import net.minecraft.util.thread.ProcessorMailbox;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
@@ -27,6 +26,7 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static com.betterchunkloading.BetterChunkLoading.TICKET_2min;
+import static com.betterchunkloading.BetterChunkLoading.rand;
 
 public class EventHandler
 {
@@ -127,15 +127,14 @@ public class EventHandler
             }
         }
 
-        ((ServerChunkCache) dataEntry.getKey().level.getChunkSource()).removeRegionTicket(TICKET_2min,
+        ((ServerChunkCache) dataEntry.getKey().level.getChunkSource()).distanceManager.removeTicket(TICKET_2min,
           dataEntry.getKey().pos,
-          1,
+          ChunkLevel.byStatus(FullChunkStatus.FULL),
           dataEntry.getKey().pos);
     }
 
     public static class ChunkInfo
     {
-
         private final long     originalTime;
         private final ChunkPos pos;
         private final Level    level;

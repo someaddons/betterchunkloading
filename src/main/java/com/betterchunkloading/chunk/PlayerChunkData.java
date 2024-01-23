@@ -3,13 +3,15 @@ package com.betterchunkloading.chunk;
 import com.betterchunkloading.BetterChunkLoading;
 import com.betterchunkloading.config.CommonConfiguration;
 import com.mojang.datafixers.util.Either;
+import it.unimi.dsi.fastutil.objects.Object2IntMap;
+import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.server.level.ServerChunkCache;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.*;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.chunk.ChunkStatus;
 import net.minecraft.world.level.chunk.storage.IOWorker;
 import net.minecraft.world.level.chunk.storage.RegionFileStorage;
 import net.minecraft.world.phys.Vec3;
@@ -40,10 +42,9 @@ public class PlayerChunkData {
     private ChunkPos predictionNewestPositionsAvg = ChunkPos.ZERO;
 
     /**
-     * Last predictive chunk ticket position and level
+     * The tickets we issued
      */
-    private ChunkPos lastChunkTicket = ChunkPos.ZERO;
-    private int lastChunkTicketLevel = 0;
+    private Object2IntOpenHashMap<ChunkPos> lastTickets = new Object2IntOpenHashMap();
 
     /**
      * Tracking for the last slow average chunk pos
@@ -61,9 +62,6 @@ public class PlayerChunkData {
             predictionIndex = 0;
             predictionOldestPositionsAvg = ChunkPos.ZERO;
             predictionNewestPositionsAvg = ChunkPos.ZERO;
-
-            lastChunkTicket = ChunkPos.ZERO;
-            lastChunkTicketLevel = 0;
 
             lazyLoadingLastChunkPositions = new BlockPos[6];
 
@@ -87,13 +85,11 @@ public class PlayerChunkData {
 
         lastChunk = player.chunkPosition();
 
-        if (CommonConfiguration.config.getCommonConfig().enableLazyChunkloading) {
+        if (BetterChunkLoading.config.getCommonConfig().enableLazyChunkloading) {
             updateSlowAvgChunkPos(player);
         }
 
-        if (CommonConfiguration.config.getCommonConfig().enablePrediction) {
-            checkPrediction(player);
-        }
+        checkDirection(player);
     }
 
     /**
@@ -103,7 +99,7 @@ public class PlayerChunkData {
      */
     private void updateSlowAvgChunkPos(final ServerPlayer player) {
         final int cacheSize =
-                Math.max(1, (int) (((ServerChunkCache) player.level().getChunkSource()).chunkMap.viewDistance / CommonConfiguration.config.getCommonConfig().lazyloadingspeed));
+                Math.max(1, (int) (((ServerChunkCache) player.level().getChunkSource()).chunkMap.viewDistance / BetterChunkLoading.config.getCommonConfig().lazyloadingspeed));
         if (lazyLoadingLastChunkPositions.length != cacheSize) {
             BlockPos[] newArray = new BlockPos[cacheSize];
             for (int i = 0; i < Math.min(cacheSize, lazyLoadingLastChunkPositions.length); i++) {
@@ -130,7 +126,7 @@ public class PlayerChunkData {
 
         posAvg = new BlockPos(posAvg.getX() / amount, 0, posAvg.getZ() / amount);
 
-        if (CommonConfiguration.config.getCommonConfig().debugLogging && !(new ChunkPos(posAvg).equals(lazyLoadingAvgChunkpos))) {
+        if (BetterChunkLoading.config.getCommonConfig().debugLogging && !(new ChunkPos(posAvg).equals(lazyLoadingAvgChunkpos))) {
             BetterChunkLoading.LOGGER.info("Set lazy player chunkloading chunk position to: " + new ChunkPos(posAvg) + ", player chunk pos:" + player.chunkPosition());
         }
 
@@ -163,7 +159,8 @@ public class PlayerChunkData {
      *
      * @param player
      */
-    private void checkPrediction(final ServerPlayer player) {
+    private void checkDirection(final ServerPlayer player)
+    {
         predictionLastChunkpositions[predictionIndex] = new BlockPos(player.getBlockX(), 0, player.getBlockZ());
         predictionIndex = (predictionIndex + 1) % 6;
 
@@ -189,98 +186,228 @@ public class PlayerChunkData {
         ChunkPos newOldest = new ChunkPos(avgOldest);
         ChunkPos newNewest = new ChunkPos(avgNewest);
 
-        // TODO: Test if lazy update is often enough for prediction loading too, to reduce frequency even more
-        /* if (lazyLoadingAvgChunkpos != null && lazyLoadingAvgChunkpos.equals(lazyLoadingLastTicketPos))
+        if (!newNewest.equals(predictionNewestPositionsAvg) || !newOldest.equals(predictionOldestPositionsAvg))
         {
-            return;
-        }*/
-
-        if (!newNewest.equals(predictionNewestPositionsAvg) || !newOldest.equals(predictionOldestPositionsAvg)) {
             predictionNewestPositionsAvg = newNewest;
             predictionOldestPositionsAvg = newOldest;
 
             final Vec3 direction = Vec3.atBottomCenterOf(avgOldest).subtract(Vec3.atBottomCenterOf(avgNewest)).reverse();
-            Vec3 currentpos = Vec3.atBottomCenterOf(avgNewest);
-            currentpos = currentpos.add(direction.scale((((ServerChunkCache) player.level().getChunkSource()).chunkMap.getDistanceManager().simulationDistance
-                    + CommonConfiguration.config.getCommonConfig().predictiondidstanceoffset) / 3.0));
+            Vec3 currentpos = player.position();
 
-            // Current
-            ChunkPos currentChunk = new ChunkPos((int) currentpos.x >> 4, (int) currentpos.z >> 4);
-
-            if (lastChunkTicket.equals(currentChunk)) {
-                return;
-            }
-
-            if (CommonConfiguration.config.getCommonConfig().debugLogging) {
-                BetterChunkLoading.LOGGER.info(
-                        "Set predictive loading position with area:" + CommonConfiguration.config.getCommonConfig().predictionarea + " to chunk: " + currentChunk + " player chunk:"
-                                + player.chunkPosition());
-            }
-
-            ServerChunkCache chunkSource = ((ServerLevel)player.level()).getChunkSource();
-
-            chunkSource.addRegionTicket(TICKET_1min,
-                    currentChunk, CommonConfiguration.config.getCommonConfig().predictionarea,
-                    currentChunk);
-
-            if (!lastChunkTicket.equals(ChunkPos.ZERO)) {
-                ((ServerChunkCache) player.level().getChunkSource()).removeRegionTicket(TICKET_1min, lastChunkTicket, lastChunkTicketLevel, lastChunkTicket);
-            }
-            lastChunkTicket = currentChunk;
-            lastChunkTicketLevel = CommonConfiguration.config.getCommonConfig().predictionarea;
-
-            if (!CommonConfiguration.config.getCommonConfig().enablePreGen)
+            if (BetterChunkLoading.config.getCommonConfig().enablePrediction)
             {
-                return;
+                checkPrediction(direction, currentpos, player);
             }
 
-            // Far area- pregen to make sure chunks generate in time
-            currentpos = currentpos.add(direction.scale((((ServerChunkCache) player.level().getChunkSource()).chunkMap.getDistanceManager().simulationDistance
-                                                           + CommonConfiguration.config.getCommonConfig().predictiondidstanceoffset) / 3.0));
+            if (BetterChunkLoading.config.getCommonConfig().enablePreGen)
+            {
+                checkPregen(direction, currentpos, player);
+            }
+        }
+    }
 
-            final ChunkPos currentChunkFar = new ChunkPos((int) currentpos.x >> 4, (int) currentpos.z >> 4);
+    List<BlockPos> goldPos = new ArrayList<>();
 
-            final RegionFileStorage storage = ((IOWorker) chunkSource.chunkMap.chunkScanner()).storage;
-            final int pregenSize = CommonConfiguration.config.getCommonConfig().preGenArea;
-            CompletableFuture<List<ChunkPos>> future = ((IOWorker) chunkSource.chunkMap.chunkScanner()).submitTask(() -> {
-                List<ChunkPos> missing = new ArrayList<>();
-                for (int i = -pregenSize; i < pregenSize; i++)
+    /**
+     * Add chunk tickets in the predicted area
+     *
+     * @param direction
+     * @param currentPos
+     * @param player
+     */
+    private void checkPrediction(final Vec3 direction, final Vec3 currentPos, final ServerPlayer player)
+    {
+        Vec3 predictedPos;
+        if (lazyLoadingLastTicketPos != null)
+        {
+            predictedPos = Vec3.atBottomCenterOf(lazyLoadingLastTicketPos.getWorldPosition());
+            predictedPos = predictedPos.add(direction.normalize().scale(16 * ((ServerChunkCache) player.level().getChunkSource()).chunkMap.viewDistance));
+        }
+        else
+        {
+            final double distFromPlayer =
+              (((ServerChunkCache) player.level().getChunkSource()).chunkMap.viewDistance - 2)
+                / (BetterChunkLoading.config.getCommonConfig().enableLazyChunkloading ? 3.0 : 1.0) * 16;
+            predictedPos = currentPos.add(direction.normalize().scale(distFromPlayer));
+        }
+
+        Vec3 previousChunk = predictedPos.add(direction.normalize().reverse().scale(16));
+
+        for (int i = 0; i < 20 && !player.level().hasChunk((int) previousChunk.x >> 4, (int) previousChunk.z >> 4); i++)
+        {
+            previousChunk = previousChunk.add(direction.normalize().reverse().scale(16));
+        }
+
+        predictedPos = previousChunk;
+
+        if (BetterChunkLoading.config.getCommonConfig().debugLogging)
+        {
+            final ChunkPos nextPredictedStartChunk = new ChunkPos((int) predictedPos.x >> 4, (int) predictedPos.z >> 4);
+            BetterChunkLoading.LOGGER.info(
+              "Set predictive loading position with area:" + BetterChunkLoading.config.getCommonConfig().predictionarea + " to chunk: " + nextPredictedStartChunk + " player chunk:"
+                + player.chunkPosition());
+        }
+
+        for (final BlockPos oldGold : goldPos)
+        {
+            player.level().setBlock(oldGold, Blocks.AIR.defaultBlockState(), 3);
+        }
+
+        goldPos = new ArrayList<>();
+        final ServerChunkCache chunkSource = ((ServerLevel) player.level()).getChunkSource();
+        final Object2IntOpenHashMap<ChunkPos> oldTickets = lastTickets;
+        lastTickets = new Object2IntOpenHashMap<>();
+
+        int repetition = (int) (Math.abs(direction.x) + Math.abs(direction.z)) / 16;
+
+        // Forward tickets
+
+        Vec3 forwardPredictedPos = predictedPos;
+
+        for (int ticketArea = BetterChunkLoading.config.getCommonConfig().predictionarea; ticketArea > 0; ticketArea = ticketArea - 1)
+        {
+            for (int i = 0; i < repetition; i++)
+            {
+                final ChunkPos nextPredictedStartChunk = new ChunkPos((int) forwardPredictedPos.x >> 4, (int) forwardPredictedPos.z >> 4);
+                addpredictionChunkTicket(nextPredictedStartChunk, ticketArea, chunkSource);
+                forwardPredictedPos = forwardPredictedPos.add(direction.normalize().scale(16));
+
+                /*
+                for (int area = ticketArea; area > 0; area--)
                 {
-                    for (int j = -pregenSize; j < pregenSize; j++)
-                    {
-                        if (Math.sqrt(i * i + j*j) > pregenSize)
-                        {
-                            continue;
-                        }
+                    goldPos.add(nextPredictedStartChunk.getWorldPosition().atY(player.getBlockY() - area));
+                    player.level().setBlock(nextPredictedStartChunk.getWorldPosition().atY(player.getBlockY() - area), Blocks.GOLD_BLOCK.defaultBlockState(), 3);
+                }
+                 */
+            }
 
-                        ChunkPos current = new ChunkPos(currentChunkFar.x + i, currentChunkFar.z + j);
-                        try
-                        {
-                            if (!storage.getRegionFile(current).hasChunk(current))
-                            {
-                                missing.add(current);
-                            }
-                        }
-                        catch (IOException e)
+            forwardPredictedPos = forwardPredictedPos.add(direction.normalize().scale(16));
+        }
+
+        // Sideways tickets
+        for (int ticketArea = 1; ticketArea < BetterChunkLoading.config.getCommonConfig().predictionarea; ticketArea = ticketArea + 1)
+        {
+            final Vec3 rotated1 = predictedPos.add(BetterChunkLoading.rotateLeft(direction.normalize()).scale(16 * ticketArea * 2));
+            final Vec3 rotated2 = predictedPos.add(BetterChunkLoading.rotateRight(direction.normalize()).scale(16 * ticketArea * 2));
+
+            final ChunkPos leftChunk = new ChunkPos((int) rotated1.x >> 4, (int) rotated1.z >> 4);
+            final ChunkPos rightChunk = new ChunkPos((int) rotated2.x >> 4, (int) rotated2.z >> 4);
+            addpredictionChunkTicket(leftChunk, BetterChunkLoading.config.getCommonConfig().predictionarea - ticketArea, chunkSource);
+            addpredictionChunkTicket(rightChunk, BetterChunkLoading.config.getCommonConfig().predictionarea - ticketArea, chunkSource);
+
+            /*
+            for (int i = BetterChunkLoading.config.getCommonConfig().predictionarea - ticketArea; i > 0; i--)
+            {
+                goldPos.add(leftChunk.getWorldPosition().atY(player.getBlockY() - i));
+                goldPos.add(rightChunk.getWorldPosition().atY(player.getBlockY() - i));
+                player.level().setBlock(leftChunk.getWorldPosition().atY(player.getBlockY() - i), Blocks.GOLD_BLOCK.defaultBlockState(), 3);
+                player.level().setBlock(rightChunk.getWorldPosition().atY(player.getBlockY() - i), Blocks.GOLD_BLOCK.defaultBlockState(), 3);
+            }*/
+        }
+
+        for (final Object2IntMap.Entry<ChunkPos> ticketEntry : oldTickets.object2IntEntrySet())
+        {
+            chunkSource.removeRegionTicket(TICKET_1min, ticketEntry.getKey(), ticketEntry.getIntValue(), ticketEntry.getKey());
+        }
+    }
+
+    /**
+     * Adds a chunk ticket
+     *
+     * @param pos
+     * @param level
+     * @param chunkSource
+     */
+    private void addpredictionChunkTicket(final ChunkPos pos, final int level, ServerChunkCache chunkSource)
+    {
+        chunkSource.addRegionTicket(TICKET_1min,
+          pos,
+          level,
+          pos);
+        lastTickets.put(pos, level);
+    }
+
+    /**
+     * Checks the predicted area further ahead for chunk pregeneration
+     *
+     * @param direction
+     * @param currentPos
+     * @param player
+     */
+    private void checkPregen(final Vec3 direction, final Vec3 currentPos, final ServerPlayer player)
+    {
+        int repetition = (int) (Math.abs(direction.x) + Math.abs(direction.z)) / 16;
+        int predictionDistance = BetterChunkLoading.config.getCommonConfig().predictionarea * (repetition + 1) - 2;
+        final int pregenSize = BetterChunkLoading.config.getCommonConfig().preGenArea;
+
+        Vec3 predictedPos;
+        if (lazyLoadingLastTicketPos != null)
+        {
+            predictedPos = Vec3.atBottomCenterOf(lazyLoadingLastTicketPos.getWorldPosition());
+            predictedPos = predictedPos.add(direction.normalize().scale(16 * (((ServerChunkCache) player.level().getChunkSource()).chunkMap.viewDistance + predictionDistance + pregenSize)));
+        }
+        else
+        {
+            final double distFromPlayer =
+              ((((ServerChunkCache) player.level().getChunkSource()).chunkMap.viewDistance - 2) / (BetterChunkLoading.config.getCommonConfig().enableLazyChunkloading ? 3.0 : 1.0)
+                + predictionDistance) * 16;
+            predictedPos = currentPos.add(direction.normalize().scale(distFromPlayer));
+        }
+
+        ServerChunkCache chunkSource = ((ServerLevel) player.level()).getChunkSource();
+        final ChunkPos predictedChunk = new ChunkPos((int) predictedPos.x >> 4, (int) predictedPos.z >> 4);
+        final BlockPos playerPos = player.blockPosition();
+        final int playerPredictionDistance = (int) Math.sqrt(predictedChunk.getWorldPosition().distSqr(playerPos));
+
+        final RegionFileStorage storage = ((IOWorker) chunkSource.chunkMap.chunkScanner()).storage;
+        CompletableFuture<List<ChunkPos>> future = ((IOWorker) chunkSource.chunkMap.chunkScanner()).submitTask(() -> {
+            List<ChunkPos> missing = new ArrayList<>();
+            for (int i = -pregenSize; i < pregenSize; i++)
+            {
+                for (int j = -pregenSize; j < pregenSize; j++)
+                {
+                    ChunkPos current = new ChunkPos(predictedChunk.x + i, predictedChunk.z + j);
+
+                    if (Math.sqrt(i * i + j * j) > pregenSize)
+                    {
+                        continue;
+                    }
+
+                    if (Math.sqrt(current.getWorldPosition().distSqr(playerPos)) < playerPredictionDistance)
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        if (!storage.getRegionFile(current).hasChunk(current))
                         {
                             missing.add(current);
                         }
                     }
+                    catch (IOException e)
+                    {
+                        missing.add(current);
+                    }
                 }
-                return Either.left(missing);
-            });
-            future.thenApplyAsync(list -> {
-                for(final ChunkPos pos:list)
-                {
-                    chunkSource.addRegionTicket(TICKET_15s,
-                      pos,
-                      0,
-                      pos);
-                }
+            }
+            return Either.left(missing);
+        });
+        future.thenApplyAsync(list -> {
+            for (int i = 0; i < list.size() && i < 20; i++)
+            {
+                final ChunkPos pos = list.get(i);
+                chunkSource.distanceManager.addTicket(TICKET_15s,
+                  pos,
+                  ChunkLevel.byStatus(FullChunkStatus.FULL),
+                  pos);
+            }
 
-                BetterChunkLoading.LOGGER.warn("Adding tickets to:"+list.size()+" chunks");
-                return null;
-            }, player.level().getServer());
-        }
+            if (BetterChunkLoading.config.getCommonConfig().debugLogging)
+            {
+                BetterChunkLoading.LOGGER.warn("Preloading " + (Math.min(list.size(), 20)) + " chunks around:" + predictedChunk);
+            }
+            return null;
+        }, player.level().getServer());
     }
 }

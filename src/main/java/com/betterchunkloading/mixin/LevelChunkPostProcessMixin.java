@@ -3,7 +3,10 @@ package com.betterchunkloading.mixin;
 import com.betterchunkloading.BetterChunkLoading;
 import com.betterchunkloading.config.CommonConfiguration;
 import com.betterchunkloading.event.EventHandler;
+import it.unimi.dsi.fastutil.shorts.ShortList;
 import net.minecraft.core.Registry;
+import net.minecraft.server.level.ChunkLevel;
+import net.minecraft.server.level.FullChunkStatus;
 import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
@@ -48,17 +51,17 @@ public abstract class LevelChunkPostProcessMixin extends ChunkAccess
     @Inject(method = "postProcessGeneration", at = @At("HEAD"))
     private void onPost(final CallbackInfo ci)
     {
-        if (CommonConfiguration.config.getCommonConfig().enableFasterChunkLoading && postProcessing.length != 0 && level.getServer() != null)
+        if (BetterChunkLoading.config.getCommonConfig().enableFasterChunkLoading && postProcessing.length != 0 && level.getServer() != null)
         {
             for (final it.unimi.dsi.fastutil.shorts.ShortList shorts : postProcessing)
             {
                 if (shorts != null && !shorts.isEmpty())
                 {
-                    ((ServerChunkCache) level.getChunkSource()).addRegionTicket(TICKET_2min,
+                    ((ServerChunkCache) level.getChunkSource()).distanceManager.addTicket(TICKET_2min,
                       chunkPos,
-                      1,
+                      ChunkLevel.byStatus(FullChunkStatus.FULL),
                       chunkPos);
-                    EventHandler.delayedLoading.put(new EventHandler.ChunkInfo(level.getServer().getTickCount(), chunkPos, level), postProcessing);
+                    EventHandler.delayedLoading.put(new EventHandler.ChunkInfo(level.getServer().getTickCount(), chunkPos, level), postProcessing.clone());
                     Arrays.fill(this.postProcessing, null);
                     break;
                 }

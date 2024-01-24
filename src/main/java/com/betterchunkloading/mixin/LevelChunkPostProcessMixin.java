@@ -51,7 +51,7 @@ public abstract class LevelChunkPostProcessMixin extends ChunkAccess
     @Inject(method = "postProcessGeneration", at = @At("HEAD"))
     private void onPost(final CallbackInfo ci)
     {
-        if (BetterChunkLoading.config.getCommonConfig().enableFasterChunkLoading && postProcessing.length != 0 && level.getServer() != null)
+        if (CommonConfiguration.config.getCommonConfig().enableFasterChunkLoading && postProcessing.length != 0 && level.getServer() != null)
         {
             for (final it.unimi.dsi.fastutil.shorts.ShortList shorts : postProcessing)
             {

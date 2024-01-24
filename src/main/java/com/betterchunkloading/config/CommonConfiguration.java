@@ -6,18 +6,19 @@ import com.google.gson.JsonObject;
 
 public class CommonConfiguration implements ICommonConfig
 {
-    public boolean enablePrediction          = true;
-    public int     predictionarea            = 7;
-    public boolean     enablePreGen            = true;
-    public int     preGenArea            = 7;
+    public static CupboardConfig<CommonConfiguration> config = new CupboardConfig<>("betterchunkloading", new CommonConfiguration());
 
+    public boolean enablePrediction = true;
+    public int     predictionarea   = 7;
+    public boolean enablePreGen     = true;
+    public int     preGenArea       = 7;
 
     public boolean enableLazyChunkloading = true;
     public double  lazyloadingspeed       = 0.7;
 
-    public boolean  enableFasterChunkTasks       = true;
-    public boolean  enableFasterChunkLoading       = true;
-    public boolean  debugLogging       = false;
+    public boolean enableFasterChunkTasks   = true;
+    public boolean enableFasterChunkLoading = true;
+    public boolean debugLogging             = false;
 
     public CommonConfiguration()
     {

@@ -1,6 +1,7 @@
 package com.betterchunkloading.mixin;
 
 import com.betterchunkloading.BetterChunkLoading;
+import com.betterchunkloading.config.CommonConfiguration;
 import net.minecraft.server.level.ChunkTaskPriorityQueue;
 import net.minecraft.server.level.ChunkTaskPriorityQueueSorter;
 import net.minecraft.util.Unit;
@@ -34,7 +35,7 @@ public abstract class ChunkTaskPriorityQueueSorterMixin
       final ProcessorHandle<T> processorHandle,
       final CallbackInfo ci)
     {
-        if (adjusting<2 && BetterChunkLoading.config.getCommonConfig().enableFasterChunkTasks && this.hasWork() && BetterChunkLoading.rand.nextInt(20) == 0
+        if (adjusting<2 && CommonConfiguration.config.getCommonConfig().enableFasterChunkTasks && this.hasWork() && BetterChunkLoading.rand.nextInt(20) == 0
         && functionChunkTaskPriorityQueue.toString().contains("worldgen"))
         {
             adjusting++;

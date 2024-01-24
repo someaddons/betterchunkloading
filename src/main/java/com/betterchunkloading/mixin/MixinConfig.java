@@ -25,7 +25,7 @@ public class MixinConfig implements IMixinConfigPlugin {
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
         if (mixinClassName.contains("DistanceManagerMixin") || mixinClassName.contains("PlayerTicketTrackerMixin")) {
-            return BetterChunkLoading.config.getCommonConfig().enableLazyChunkloading;
+            return CommonConfiguration.config.getCommonConfig().enableLazyChunkloading;
         }
 
         return true;

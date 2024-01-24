@@ -23,8 +23,6 @@ public class BetterChunkLoading implements ModInitializer {
     public static Random rand = new Random();
     public static       int                                 player_modifier = 1;
 
-    public static CupboardConfig<CommonConfiguration> config = new CupboardConfig<>("betterchunkloading", new CommonConfiguration());
-
     public static final TicketType<ChunkPos> TICKET_2min = TicketType.create("betterchunkloading5min", Comparator.comparingLong(ChunkPos::toLong), 20 * 60 * 2);
     public static final TicketType<ChunkPos> TICKET_1min = TicketType.create("betterchunkloading1min", Comparator.comparingLong(ChunkPos::toLong), 20 * 60 * 1);
     public static final TicketType<ChunkPos> TICKET_15s  = TicketType.create("betterchunkloading15s", Comparator.comparingLong(ChunkPos::toLong), 20 * 15 * 1);

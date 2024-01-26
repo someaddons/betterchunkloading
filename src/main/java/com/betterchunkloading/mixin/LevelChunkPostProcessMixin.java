@@ -61,7 +61,7 @@ public abstract class LevelChunkPostProcessMixin extends ChunkAccess
                       chunkPos,
                       ChunkLevel.byStatus(FullChunkStatus.FULL),
                       chunkPos);
-                    EventHandler.delayedLoading.put(new EventHandler.ChunkInfo(level.getServer().getTickCount(), chunkPos, level), postProcessing.clone());
+                    EventHandler.delayedLoading.put(new EventHandler.ChunkInfo(level.getServer().getTickCount(), chunkPos, level), Arrays.copyOf(postProcessing, postProcessing.length));
                     Arrays.fill(this.postProcessing, null);
                     break;
                 }

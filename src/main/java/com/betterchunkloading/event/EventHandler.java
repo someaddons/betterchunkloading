@@ -125,6 +125,7 @@ public class EventHandler
                 {
                      applyToChunk(dataEntry);
                      iterator.remove();
+                     return;
                 }
 
                 if (serverTime - dataEntry.getKey().originalTime > 20 * 60)

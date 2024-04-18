@@ -1,5 +1,6 @@
 package com.betterchunkloading.mixin;
 
+import com.betterchunkloading.BetterChunkLoading;
 import net.minecraft.client.Options;
 import net.minecraftforge.fml.loading.FMLEnvironment;
 import org.spongepowered.asm.mixin.Mixin;
@@ -13,7 +14,7 @@ public class OptionsDevMixin
     @Inject(method = "getEffectiveRenderDistance", at = @At("HEAD"), cancellable = true)
     private void getRenderDistance(final CallbackInfoReturnable<Integer> cir)
     {
-        if (!FMLEnvironment.production)
+        if (BetterChunkLoading.IN_DEV)
         {
             cir.setReturnValue(32);
         }

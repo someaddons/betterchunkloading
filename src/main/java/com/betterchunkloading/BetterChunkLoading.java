@@ -14,6 +14,7 @@ import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.minecraftforge.fml.loading.FMLEnvironment;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -31,9 +32,11 @@ public class BetterChunkLoading
     public static       CupboardConfig<CommonConfiguration> config          = new CupboardConfig<>(MOD_ID, new CommonConfiguration());
     public static       Random                              rand            = new Random();
 
-    public static final TicketType<ChunkPos> TICKET_2min = TicketType.create("betterchunkloading5min", Comparator.comparingLong(ChunkPos::toLong), 20 * 60 * 2);
-    public static final TicketType<ChunkPos> TICKET_1min = TicketType.create("betterchunkloading1min", Comparator.comparingLong(ChunkPos::toLong), 20 * 60 * 1);
-    public static final TicketType<ChunkPos> TICKET_15s  = TicketType.create("betterchunkloading15s", Comparator.comparingLong(ChunkPos::toLong), 20 * 15 * 1);
+    public static final TicketType<ChunkPos> TICKET_POST_PROCESS = TicketType.create("betterchunkloadingpostprocess", Comparator.comparingLong(ChunkPos::toLong), 20 * 60 * 5);
+    public static final TicketType<ChunkPos> TICKET_PREDICTION        = TicketType.create("betterchunkloadingprediction", Comparator.comparingLong(ChunkPos::toLong), 20 * 60 * 1);
+    public static final TicketType<ChunkPos> TICKET_PLAYER_CHUNK_AREA = TicketType.create("betterchunkloadingplayerchunk", Comparator.comparingLong(ChunkPos::toLong), 20 * 60 * 20);
+
+    public static boolean IN_DEV = !FMLEnvironment.production;
 
     public BetterChunkLoading()
     {
@@ -60,29 +63,5 @@ public class BetterChunkLoading
     private void setup(final FMLCommonSetupEvent event)
     {
         LOGGER.info(MOD_ID + " mod initialized");
-    }
-
-    public static Vec3 rotateLeft(final Vec3 vec)
-    {
-        if (Math.abs(vec.x) > Math.abs(vec.z))
-        {
-            return new Vec3(-vec.z, vec.y, vec.x);
-        }
-        else
-        {
-            return new Vec3(vec.z, vec.y, -vec.x);
-        }
-    }
-
-    public static Vec3 rotateRight(final Vec3 vec)
-    {
-        if (Math.abs(vec.x) > Math.abs(vec.z))
-        {
-            return new Vec3(vec.z, vec.y, -vec.x);
-        }
-        else
-        {
-            return new Vec3(-vec.z, vec.y, vec.x);
-        }
     }
 }

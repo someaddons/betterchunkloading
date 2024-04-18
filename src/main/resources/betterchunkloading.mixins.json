@@ -6,12 +6,15 @@
   "mixinPriority": 200,
   "mixins": [
     "LevelChunkPostProcessMixin",
-    "DistanceManagerMixin",
+    "ChunkMapViewDistanceFixed",
     "PlayerChunkDataMixin",
-    "PlayerTicketTrackerMixin",
+    "RegionFileStorageMixin",
+    "PlayerMovementNoUnloaded",
+    "PathRecomputeChunkLoadPrevention",
     "ChunkTaskPriorityQueueSorterMixin"
   ],
   "client": [
+    "OptionsDevMixin"
   ],
   "injectors": {
     "defaultRequire": 1

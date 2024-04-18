@@ -5,6 +5,8 @@ import net.minecraft.server.level.ChunkTaskPriorityQueue;
 import net.minecraft.server.level.ChunkTaskPriorityQueueSorter;
 import net.minecraft.util.Unit;
 import net.minecraft.util.thread.ProcessorHandle;
+import net.minecraft.util.thread.ProcessorMailbox;
+import net.minecraft.util.thread.StrictQueue;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -13,7 +15,6 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import java.util.Map;
 import java.util.function.Function;
 
 /**
@@ -25,24 +26,23 @@ public abstract class ChunkTaskPriorityQueueSorterMixin
     @Shadow
     protected abstract <T> void pollTask(final ChunkTaskPriorityQueue<Function<ProcessorHandle<Unit>, T>> p_140646_, final ProcessorHandle<T> p_140647_);
 
-    @Shadow @Final private Map<ProcessorHandle<?>, ChunkTaskPriorityQueue<? extends Function<ProcessorHandle<Unit>, ?>>> queues;
+    @Shadow
+    public abstract boolean hasWork();
+
     @Unique
-    boolean adjusting = false;
+    int adjusting = 0;
 
     @Inject(method = "pollTask", at = @At("RETURN"))
-    private <T> void lagebegone$polltask(
+    private <T> void polltaskAdditionally(
       final ChunkTaskPriorityQueue<Function<ProcessorHandle<Unit>, T>> functionChunkTaskPriorityQueue,
       final ProcessorHandle<T> processorHandle,
       final CallbackInfo ci)
     {
-        if (!adjusting)
+        if (functionChunkTaskPriorityQueue.hasWork() && adjusting == 0 && BetterChunkLoading.config.getCommonConfig().enableFasterChunkTasks && this.hasWork() && functionChunkTaskPriorityQueue.toString().contains("worldgen"))
         {
-            adjusting = true;
-            for (int i = 0; i < BetterChunkLoading.player_modifier; i++)
-            {
-               pollTask(functionChunkTaskPriorityQueue, processorHandle);
-            }
-            adjusting = false;
+            adjusting++;
+            pollTask(functionChunkTaskPriorityQueue, processorHandle);
+            adjusting--;
         }
     }
 }

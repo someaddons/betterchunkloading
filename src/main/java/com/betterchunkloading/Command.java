@@ -1,16 +1,19 @@
 package com.betterchunkloading;
 
-import com.betterchunkloading.event.EventHandler;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.datafixers.util.Either;
+import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
 import net.minecraft.commands.arguments.coordinates.Coordinates;
 import net.minecraft.core.BlockPos;
-import net.minecraft.server.level.ServerChunkCache;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.*;
+import net.minecraft.util.SortedArraySet;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.chunk.ChunkStatus;
 import net.minecraft.world.level.chunk.storage.IOWorker;
 import net.minecraft.world.level.chunk.storage.RegionFileStorage;
 
@@ -18,8 +21,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-
-import static com.betterchunkloading.BetterChunkLoading.TICKET_15s;
 
 public class Command
 {
@@ -31,7 +32,7 @@ public class Command
             Commands.literal("printPlayerTicks")
               .executes(context ->
               {
-                  EventHandler.printPlayerTickets(context.getSource());
+                  printPlayerTickets(context.getSource());
                   return 1;
               }))
           .then(
@@ -45,10 +46,10 @@ public class Command
                 })))
           .then(
             Commands.literal("genChunkAt")
-              .then(Commands.argument("distance", BlockPosArgument.blockPos())
+              .then(Commands.argument("position", BlockPosArgument.blockPos())
                 .executes(context ->
                 {
-                    final BlockPos viewDist = context.getArgument("distance", Coordinates.class).getBlockPos(context.getSource());
+                    final BlockPos viewDist = ((Coordinates)context.getArgument("position", Coordinates.class)).getBlockPos((CommandSourceStack)context.getSource());
 
                     ChunkPos currentChunk = new ChunkPos(viewDist.getX() >> 4, viewDist.getZ() >> 4);
                     final RegionFileStorage storage = ((IOWorker) context.getSource().getLevel().getChunkSource().chunkMap.chunkScanner()).storage;
@@ -59,7 +60,7 @@ public class Command
                         {
                             for (int j = -10; j < 10; j++)
                             {
-                                if (Math.sqrt(i * i + j * j) > 10)
+                                if (Math.sqrt(i * i + j * j) > 20)
                                 {
                                     continue;
                                 }
@@ -83,15 +84,30 @@ public class Command
                     future.thenApplyAsync(list -> {
                         for (final ChunkPos pos : list)
                         {
-                            ((ServerChunkCache) context.getSource().getLevel().getChunkSource()).addRegionTicket(TICKET_15s,
+                            ((ServerChunkCache) context.getSource().getLevel().getChunkSource()).chunkMap.getDistanceManager().addTicket(TicketType.UNKNOWN,
                               pos,
-                              0,
+                              33,
                               pos);
                         }
 
                         BetterChunkLoading.LOGGER.warn("Adding tickets to:" + list.size() + " chunks");
+                        ((ServerChunkCache) context.getSource().getLevel().getChunkSource()).runDistanceManagerUpdates();
                         return null;
                     }, context.getSource().getServer());
+
+                    return 1;
+                })))
+          .then(
+            Commands.literal("loadchunk")
+              .then(Commands.argument("position", BlockPosArgument.blockPos())
+                .executes(context ->
+                {
+                    ChunkPos chunkPos = new ChunkPos( ((Coordinates)context.getArgument("position", Coordinates.class)).getBlockPos((CommandSourceStack)context.getSource()));
+                    //Loads 9 chunks, full status:
+                    context.getSource().getLevel().getChunkSource().distanceManager.addRegionTicket(TicketType.UNKNOWN,
+                      chunkPos,
+                      1,
+                      chunkPos);
 
                     return 1;
                 })))
@@ -104,5 +120,49 @@ public class Command
                     context.getSource().getLevel().getChunkSource().setSimulationDistance(viewDist);
                     return 1;
                 })));
+    }
+
+    /**
+     * Util to print player tickets
+     */
+    public static void printPlayerTickets(CommandSourceStack commandSourceStack)
+    {
+        for (final ServerLevel level : commandSourceStack.getServer().getAllLevels())
+        {
+            level.getChunkSource().distanceManager.runAllUpdates(level.getChunkSource().chunkMap);
+
+            int playerTickets = 0;
+
+            for (final Long2ObjectMap.Entry<SortedArraySet<Ticket<?>>> entry : level.getChunkSource().distanceManager.tickets.long2ObjectEntrySet())
+            {
+                for (final Ticket<?> ticket : entry.getValue())
+                {
+                    if (ticket != null && ticket.getType() == TicketType.PLAYER)
+                    {
+                        playerTickets++;
+                    }
+                }
+            }
+
+            commandSourceStack.sendSystemMessage(Component.literal("Dimension:" + level.dimension().location().toString()));
+            commandSourceStack.sendSystemMessage(Component.literal("Player tickets(viewdistance):" + playerTickets));
+            BetterChunkLoading.LOGGER.warn("Dimension:" + level.dimension().location().toString());
+            BetterChunkLoading.LOGGER.warn("Player tickets(viewdistance):" + playerTickets);
+
+            playerTickets = 0;
+            for (final Long2ObjectMap.Entry<SortedArraySet<Ticket<?>>> entry : level.getChunkSource().distanceManager.tickingTicketsTracker.tickets.long2ObjectEntrySet())
+            {
+                for (final Ticket<?> ticket : entry.getValue())
+                {
+                    if (ticket != null && ticket.getType() == TicketType.PLAYER)
+                    {
+                        playerTickets++;
+                    }
+                }
+            }
+
+            commandSourceStack.sendSystemMessage(Component.literal("Player ticking(sim distance) tickets:" + playerTickets));
+            BetterChunkLoading.LOGGER.warn("Player ticking(sim distance) tickets:" + playerTickets);
+        }
     }
 }

@@ -11,9 +11,11 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 @Mixin(PersistentEntitySectionManager.class)
-public abstract class PersistentEntityDebugMixin<T extends EntityAccess> {
+public abstract class PersistentEntityDebugMixin<T extends EntityAccess>
+{
     @Redirect(method = "method_31825", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/entity/EntitySection;getEntities()Ljava/util/stream/Stream;", ordinal = 2, remap = true), remap = false, require = 0)
-    private Stream fixFabricCrash(final EntitySection<EntityAccess> instance) {
+    private Stream fixFabricCrash(final EntitySection<EntityAccess> instance)
+    {
         return instance.getEntities().collect(Collectors.toList()).stream();
     }
 }

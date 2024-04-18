@@ -1,6 +1,6 @@
 package com.betterchunkloading.mixin;
 
-import net.fabricmc.loader.api.FabricLoader;
+import com.betterchunkloading.BetterChunkLoading;
 import net.minecraft.client.Options;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -10,10 +10,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(Options.class)
 public class OptionsDevMixin
 {
-    @Inject(method = "getEffectiveRenderDistance", at = @At("HEAD"), cancellable = true, require = 0)
+    @Inject(method = "getEffectiveRenderDistance", at = @At("HEAD"), cancellable = true)
     private void getRenderDistance(final CallbackInfoReturnable<Integer> cir)
     {
-        if (FabricLoader.getInstance().isDevelopmentEnvironment())
+        if (BetterChunkLoading.IN_DEV)
         {
             cir.setReturnValue(32);
         }

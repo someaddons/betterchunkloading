@@ -1,151 +1,341 @@
 package com.betterchunkloading.chunk;
 
 import com.betterchunkloading.BetterChunkLoading;
-import com.betterchunkloading.config.CommonConfiguration;
+import it.unimi.dsi.fastutil.objects.Object2IntMap;
+import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerChunkCache;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
-import static com.betterchunkloading.BetterChunkLoading.TICKET_1min;
+import static com.betterchunkloading.BetterChunkLoading.*;
 
-public class PlayerChunkData {
+public class PlayerChunkData
+{
+    private static final ChunkPos INVALID = new ChunkPos(0, 0)
+    {
+        @Override
+        public boolean equals(final Object other)
+        {
+            return other == INVALID;
+        }
+    };
 
     /**
      * Last chunk pos of the player
      */
-    private ChunkPos lastChunk = ChunkPos.ZERO;
+    private ChunkPos lastChunk = INVALID;
 
     private ResourceKey<Level> lastLevel = null;
 
     /**
-     * Tracking for the last six chunks visited
+     * The tickets we issued
      */
-    private BlockPos[] predictionLastChunkpositions = new BlockPos[6];
-    private int predictionIndex = 0;
-    private ChunkPos predictionOldestPositionsAvg = ChunkPos.ZERO;
-    private ChunkPos predictionNewestPositionsAvg = ChunkPos.ZERO;
+    private Object2IntOpenHashMap<ChunkPos> lastTickets = new Object2IntOpenHashMap();
 
     /**
-     * Last predictive chunk ticket position and level
+     * Tracking for the view area
      */
-    private ChunkPos lastChunkTicket = ChunkPos.ZERO;
-    private int lastChunkTicketLevel = 0;
+    private ChunkPos playerChunkLoadCenter       = null;
+    private ChunkPos playerChunkLoadLastPos      = null;
+    private int      playerChunkLoadViewDistance = 0;
 
     /**
-     * Tracking for the last slow average chunk pos
+     * Tracks player movement and speed
      */
-    private BlockPos[] lazyLoadingLastChunkPositions = new BlockPos[6];
-    private int lazyLoadingIndex = 0;
-    private ChunkPos lazyLoadingAvgChunkpos = null;
-    private ChunkPos lazyLoadingLastTicketPos = null;
+    private BlockPos[] playerMovementTracker      = new BlockPos[6];
+    private ChunkPos   playerMovementTrackerAvg   = INVALID;
+    private int        playerMovementTrackerIndex = 0;
 
-    public void onChunkChanged(ServerPlayer player) {
-        if (!player.level.dimension().equals(lastLevel)) {
+    private long     lastPlayerMovementUpdate = 0;
+    private BlockPos lastPlayerPos            = null;
+    private double   playerMovementSpeed      = 0;
+
+    /**
+     * Direction of the last 6 chunks, 3 + 3, max length = 3 chunks min = 0
+     */
+    private Vec3 direction = Vec3.ZERO;
+
+    public boolean isFrozen = false;
+
+    /**
+     * Movement/Interval callback
+     *
+     * @param player
+     */
+    public void onChunkChanged(ServerPlayer player)
+    {
+        if (player == null || player.getClass() != ServerPlayer.class)
+        {
+            return;
+        }
+
+        if (!player.level.dimension().equals(lastLevel))
+        {
             lastLevel = player.level.dimension();
 
-            predictionLastChunkpositions = new BlockPos[6];
-            predictionIndex = 0;
-            predictionOldestPositionsAvg = ChunkPos.ZERO;
-            predictionNewestPositionsAvg = ChunkPos.ZERO;
+            setPlayerViewDistTo(null, player.level.getServer().getLevel(lastLevel).getChunkSource(), 0);
+            playerChunkLoadViewDistance = 4;
+            playerChunkLoadCenter = null;
 
-            lastChunkTicket = ChunkPos.ZERO;
-            lastChunkTicketLevel = 0;
-
-            lazyLoadingLastChunkPositions = new BlockPos[6];
+            playerMovementTracker = new BlockPos[6];
+            playerMovementTrackerAvg = INVALID;
+            playerMovementTrackerIndex = 0;
+            lastPlayerMovementUpdate = 0;
+            lastPlayerPos = null;
+            playerMovementSpeed = 0;
 
             lastChunk = null;
         }
 
+        if (lastChunk != null && player.chunkPosition().getChessboardDistance(lastChunk) > 10)
+        {
+            // Reset tracking
+            setPlayerViewDistTo(player.chunkPosition(), (ServerChunkCache) player.level.getChunkSource(), 0);
+            playerChunkLoadViewDistance = 4;
+            playerChunkLoadCenter = null;
 
-        if (player.chunkPosition().equals(lastChunk)) {
+            playerMovementTracker = new BlockPos[6];
+            playerMovementTrackerAvg = INVALID;
+            playerMovementTrackerIndex = 0;
+            lastPlayerMovementUpdate = 0;
+            lastPlayerPos = null;
+            playerMovementSpeed = 0;
+        }
+
+        if (player.chunkPosition().equals(lastChunk))
+        {
+            if ((System.currentTimeMillis() - lastPlayerMovementUpdate) > 5 * 1000)
+            {
+                trackPlayerMovement(player);
+            }
+
+            if (isFrozen)
+            {
+                if (player.level
+                  .hasChunk((int) (player.blockPosition().getX() + direction.normalize().multiply(32, 32, 32).x) >> 4,
+                    (int) (player.blockPosition().getZ() + direction.normalize().multiply(32, 32, 32).z) >> 4))
+                {
+                    isFrozen = false;
+                }
+            }
+
             return;
         }
 
-        if (lastChunk != null && player.chunkPosition().getChessboardDistance(lastChunk) > 2) {
-            // Reset prediction & slowavg regions
-            predictionLastChunkpositions = new BlockPos[6];
-            predictionIndex = 0;
-            predictionOldestPositionsAvg = ChunkPos.ZERO;
-            predictionNewestPositionsAvg = ChunkPos.ZERO;
-
-            lazyLoadingLastChunkPositions = new BlockPos[6];
-        }
-
+        trackPlayerMovement(player);
         lastChunk = player.chunkPosition();
-
-        if (CommonConfiguration.config.getCommonConfig().enableLazyChunkloading) {
-            updateSlowAvgChunkPos(player);
-        }
-
-        if (CommonConfiguration.config.getCommonConfig().enablePrediction) {
-            checkPrediction(player);
-        }
     }
 
     /**
-     * Updates the slow changing average chunkpos of the player
+     * Tracks player movement, both location and speed indirectly
      *
      * @param player
      */
-    private void updateSlowAvgChunkPos(final ServerPlayer player) {
-        final int cacheSize =
-                Math.max(1, (int) (((ServerChunkCache) player.level.getChunkSource()).chunkMap.viewDistance / CommonConfiguration.config.getCommonConfig().lazyloadingspeed));
-        if (lazyLoadingLastChunkPositions.length != cacheSize) {
-            BlockPos[] newArray = new BlockPos[cacheSize];
-            for (int i = 0; i < Math.min(cacheSize, lazyLoadingLastChunkPositions.length); i++) {
-                newArray[i] = lazyLoadingLastChunkPositions[i];
+    private void trackPlayerMovement(final ServerPlayer player)
+    {
+        final long currentTime = System.currentTimeMillis();
+        if (lastPlayerPos != null)
+        {
+            playerMovementSpeed -= playerMovementSpeed / 5;
+
+            final int x = player.getBlockX() - lastPlayerPos.getX();
+            final int z = player.getBlockZ() - lastPlayerPos.getZ();
+            playerMovementSpeed += (Math.sqrt(x * x + z * z) / ((currentTime - lastPlayerMovementUpdate) / 1000.0)) / 5;
+        }
+
+        lastPlayerPos = player.blockPosition();
+        lastPlayerMovementUpdate = currentTime;
+
+        if (!player.chunkPosition().equals(lastChunk))
+        {
+            playerMovementTrackerIndex = (playerMovementTrackerIndex + 1) % playerMovementTracker.length;
+            playerMovementTracker[playerMovementTrackerIndex] = player.blockPosition();
+
+            int x = 0;
+            int z = 0;
+            int count = 0;
+
+            for (int i = 0; i < playerMovementTracker.length; i++)
+            {
+                final BlockPos pos = playerMovementTracker[i];
+                if (pos != null)
+                {
+                    count++;
+                    x += pos.getX();
+                    z += pos.getZ();
+                }
             }
 
-            lazyLoadingLastChunkPositions = newArray;
-            lazyLoadingIndex = lazyLoadingIndex % cacheSize;
+            final ChunkPos newPos = new ChunkPos((x / count) >> 4, (z / count) >> 4);
+
+            playerMovementTrackerAvg = newPos;
+            checkDirection(player);
         }
 
-        lazyLoadingIndex = (lazyLoadingIndex + 1) % lazyLoadingLastChunkPositions.length;
-        lazyLoadingLastChunkPositions[lazyLoadingIndex] = new BlockPos(player.getBlockX(), 0, player.getBlockZ());
-
-        int amount = 0;
-        BlockPos posAvg = BlockPos.ZERO;
-
-        for (int i = 0; i < cacheSize; i++) {
-            final BlockPos pos = lazyLoadingLastChunkPositions[i];
-            if (pos != null) {
-                posAvg = posAvg.offset(pos);
-                amount++;
-            }
-        }
-
-        posAvg = new BlockPos(posAvg.getX() / amount, 0, posAvg.getZ() / amount);
-
-        if (CommonConfiguration.config.getCommonConfig().debugLogging && !(new ChunkPos(posAvg).equals(lazyLoadingAvgChunkpos))) {
-            BetterChunkLoading.LOGGER.info("Set lazy player chunkloading chunk position to: " + new ChunkPos(posAvg) + ", player chunk pos:" + player.chunkPosition());
-        }
-
-        lazyLoadingAvgChunkpos = new ChunkPos(posAvg);
+        chunkLoadForPlayer(player, playerMovementTrackerAvg);
     }
 
     /**
-     * Get the players section pos for chunkloading
+     * Calculates a movement vector from the tracked player positions, min lenght 0, max lenght 48 (6 chunks tracked)
      *
      * @return
      */
-    public ChunkPos getSlowAvgPos() {
-        return lazyLoadingAvgChunkpos;
-    }
+    private Vec3 calculatePlayerMovementVec(final ServerPlayer player)
+    {
+        int xOld = 0;
+        int zOld = 0;
+        int oldCounter = 0;
 
-    public ChunkPos getLazyLoadingLastTicketPos() {
-        return lazyLoadingLastTicketPos;
-    }
+        int xNew = 0;
+        int zNew = 0;
+        int newCounter = 0;
 
-    public void setLazyLoadingLastTicketPos(final ChunkPos lastChunk) {
-        if (lastChunk != null && lazyLoadingLastTicketPos != null) {
-            BetterChunkLoading.LOGGER.error("Did not unload previous position!", new Exception());
+        for (int i = 0; i < playerMovementTracker.length; i++)
+        {
+            final BlockPos pos = (playerMovementTracker[(playerMovementTrackerIndex + 1 + i) % playerMovementTracker.length]);
+            if (pos == null)
+            {
+                continue;
+            }
+
+            if (i < playerMovementTracker.length / 2)
+            {
+                xOld += pos.getX();
+                zOld += pos.getZ();
+                oldCounter++;
+            }
+            else
+            {
+                xNew += pos.getX();
+                zNew += pos.getZ();
+                newCounter++;
+            }
         }
 
-        lazyLoadingLastTicketPos = lastChunk;
+        if (oldCounter == 0 || newCounter == 0)
+        {
+            return new Vec3(48, 0, 0);
+        }
+
+        xOld /= oldCounter;
+        zOld /= oldCounter;
+        xNew /= newCounter;
+        zNew /= newCounter;
+
+        return new Vec3(xNew - xOld, 0, zNew - zOld);
+    }
+
+    /**
+     * Does chunkloading around the player
+     *
+     * @param player   player this is for
+     * @param newChunk chunk position to load around, avg of player movement
+     */
+    private void chunkLoadForPlayer(final ServerPlayer player, final ChunkPos newChunk)
+    {
+        if (!config.getCommonConfig().enableSmartChunkLoading)
+        {
+            return;
+        }
+
+        final int viewDistance = calculateViewDistance(player);
+
+        if (newChunk.equals(playerChunkLoadCenter))
+        {
+            if (viewDistance == playerChunkLoadViewDistance)
+            {
+                return;
+            }
+        }
+
+        playerChunkLoadCenter = newChunk;
+        setPlayerViewDistTo(playerChunkLoadCenter, ((ServerLevel) player.level).getChunkSource(), viewDistance);
+    }
+
+    /**
+     * Calculates the view distance based on player movement
+     *
+     * @param player
+     * @return
+     */
+    private int calculateViewDistance(final ServerPlayer player)
+    {
+        final Vec3 playerMovement = calculatePlayerMovementVec(player).multiply(playerMovementSpeed / 4.3, 0, playerMovementSpeed / 4.3);
+        final ServerChunkCache chunkSource = ((ServerLevel) player.level).getChunkSource();
+
+        // Normal movement: playermovement length: <=40, max creative flight speed length: 220
+        // <= 40: chunkSource.chunkMap.viewDistance
+        // (1.0 - (playermovement length - 40)/(80 * config.increaseformoreviewdistancewhilemoving)) * chunkSource.chunkMap.viewDistance
+        // 120+: minmum view dist of 4
+
+        int viewDistance = 4;
+        if (playerMovement.length() < 120 * config.getCommonConfig().smartChunkLoadModifier)
+        {
+            if (playerMovement.length() <= 40 * config.getCommonConfig().smartChunkLoadModifier)
+            {
+                viewDistance = chunkSource.chunkMap.viewDistance;
+            }
+            else
+            {
+                viewDistance = (int) ((1.0 - (playerMovement.length() - 40) / (80 * config.getCommonConfig().smartChunkLoadModifier)) * chunkSource.chunkMap.viewDistance);
+            }
+        }
+
+        return Math.max(5, viewDistance);
+    }
+
+    /**
+     * Sets the player view distance area to the given position
+     *
+     * @param pos
+     * @param chunkSource
+     */
+    private void setPlayerViewDistTo(final ChunkPos pos, ServerChunkCache chunkSource, int viewDistance)
+    {
+        if (!BetterChunkLoading.config.getCommonConfig().enableSmartChunkLoading)
+        {
+            return;
+        }
+
+        if (playerChunkLoadLastPos != null)
+        {
+            chunkSource.removeRegionTicket(TICKET_PLAYER_CHUNK_AREA,
+              playerChunkLoadLastPos,
+              playerChunkLoadViewDistance,
+              playerChunkLoadLastPos);
+            playerChunkLoadLastPos = null;
+        }
+
+        if (pos == null)
+        {
+            return;
+        }
+
+        playerChunkLoadViewDistance = viewDistance;
+        playerChunkLoadLastPos = pos;
+        chunkSource.addRegionTicket(TICKET_PLAYER_CHUNK_AREA, pos, viewDistance, pos);
+
+        chunkSource.runDistanceManagerUpdates();
+
+        if (BetterChunkLoading.config.getCommonConfig().debugLogging)
+        {
+            BetterChunkLoading.LOGGER.info("Set player chunkloading chunk position to: " + pos + " size:" + viewDistance);
+        }
+    }
+
+    /**
+     * On logout reset tickets
+     *
+     * @param player
+     */
+    public void onLogout(final ServerPlayer player)
+    {
+        setPlayerViewDistTo(null, ((ServerLevel) player.level).getChunkSource(), 0);
     }
 
     /**
@@ -153,69 +343,85 @@ public class PlayerChunkData {
      *
      * @param player
      */
-    private void checkPrediction(final ServerPlayer player) {
-        predictionLastChunkpositions[predictionIndex] = new BlockPos(player.getBlockX(), 0, player.getBlockZ());
-        predictionIndex = (predictionIndex + 1) % 6;
+    private void checkDirection(final ServerPlayer player)
+    {
+        direction = calculatePlayerMovementVec(player);
+        Vec3 currentpos = player.position();
 
-        BlockPos avgOldest = BlockPos.ZERO;
-        for (int i = 0; i < 3; i++) {
-            if (predictionLastChunkpositions[(predictionIndex + i) % 6] == null) {
-                return;
-            }
-            avgOldest = avgOldest.offset(predictionLastChunkpositions[(predictionIndex + i) % 6]);
-        }
-        avgOldest = new BlockPos(avgOldest.getX() / 3, 0, avgOldest.getZ() / 3);
-
-        BlockPos avgNewest = BlockPos.ZERO;
-        for (int i = 3; i < 6; i++) {
-            if (predictionLastChunkpositions[(predictionIndex + i) % 6] == null) {
-                return;
-            }
-            avgNewest = avgNewest.offset(predictionLastChunkpositions[(predictionIndex + i) % 6]);
-        }
-
-        avgNewest = new BlockPos(avgNewest.getX() / 3, 0, avgNewest.getZ() / 3);
-
-        ChunkPos newOldest = new ChunkPos(avgOldest);
-        ChunkPos newNewest = new ChunkPos(avgNewest);
-
-        // TODO: Test if lazy update is often enough for prediction loading too, to reduce frequency even more
-        /* if (lazyLoadingAvgChunkpos != null && lazyLoadingAvgChunkpos.equals(lazyLoadingLastTicketPos))
+        if (BetterChunkLoading.config.getCommonConfig().enablePrediction)
         {
-            return;
-        }*/
-
-        if (!newNewest.equals(predictionNewestPositionsAvg) || !newOldest.equals(predictionOldestPositionsAvg)) {
-            predictionNewestPositionsAvg = newNewest;
-            predictionOldestPositionsAvg = newOldest;
-
-            final Vec3 direction = Vec3.atBottomCenterOf(avgOldest).subtract(Vec3.atBottomCenterOf(avgNewest)).reverse();
-            Vec3 currentpos = Vec3.atBottomCenterOf(avgNewest);
-            currentpos = currentpos.add(direction.scale((((ServerChunkCache) player.level.getChunkSource()).chunkMap.getDistanceManager().simulationDistance
-                    + CommonConfiguration.config.getCommonConfig().predictiondidstanceoffset) / 3.0));
-
-            // Current
-            ChunkPos currentChunk = new ChunkPos((int) currentpos.x >> 4, (int) currentpos.z >> 4);
-
-            if (lastChunkTicket.equals(currentChunk)) {
-                return;
-            }
-
-            if (CommonConfiguration.config.getCommonConfig().debugLogging) {
-                BetterChunkLoading.LOGGER.info(
-                        "Set predictive loading position with area:" + CommonConfiguration.config.getCommonConfig().predictionarea + " to chunk: " + currentChunk + " player chunk:"
-                                + player.chunkPosition());
-            }
-
-            ((ServerChunkCache) player.level.getChunkSource()).addRegionTicket(TICKET_1min,
-                    currentChunk, CommonConfiguration.config.getCommonConfig().predictionarea,
-                    currentChunk);
-
-            if (!lastChunkTicket.equals(ChunkPos.ZERO)) {
-                ((ServerChunkCache) player.level.getChunkSource()).removeRegionTicket(TICKET_1min, lastChunkTicket, lastChunkTicketLevel, lastChunkTicket);
-            }
-            lastChunkTicket = currentChunk;
-            lastChunkTicketLevel = CommonConfiguration.config.getCommonConfig().predictionarea;
+            checkPrediction(direction, currentpos, player);
         }
+
+        if (!player.level
+          .hasChunk((int) (player.blockPosition().getX() + direction.normalize().multiply(32, 32, 32).x) >> 4,
+            (int) (player.blockPosition().getZ() + direction.normalize().multiply(32, 32, 32).z) >> 4))
+        {
+            isFrozen = true;
+        }
+    }
+
+    /**
+     * Add chunk tickets in the predicted area
+     *
+     * @param direction
+     * @param currentPos
+     * @param player
+     */
+    private void checkPrediction(final Vec3 direction, final Vec3 currentPos, final ServerPlayer player)
+    {
+        final int viewDist =
+          config.getCommonConfig().enableSmartChunkLoading ? playerChunkLoadViewDistance : ((ServerChunkCache) player.level.getChunkSource()).chunkMap.viewDistance;
+        Vec3 predictedPos = currentPos.add(direction.normalize().scale(16 * (viewDist * 0.7)));
+
+        for (int i = 0; i < 30 && !player.level.hasChunk((int) predictedPos.x >> 4, (int) predictedPos.z >> 4); i++)
+        {
+            predictedPos = predictedPos.add(direction.normalize().reverse().scale(16));
+        }
+
+        if (BetterChunkLoading.config.getCommonConfig().debugLogging)
+        {
+            final ChunkPos nextPredictedStartChunk = new ChunkPos((int) predictedPos.x >> 4, (int) predictedPos.z >> 4);
+            BetterChunkLoading.LOGGER.info(
+              "Set predictive loading position with area:" + Math.min(config.getCommonConfig().predictionarea, viewDist + 1) + " to chunk: " + nextPredictedStartChunk
+                + " player chunk:"
+                + player.chunkPosition());
+        }
+
+        final Object2IntOpenHashMap<ChunkPos> oldTickets = lastTickets;
+        lastTickets = new Object2IntOpenHashMap<>();
+
+        final int repetition = (int) (Math.abs(direction.x) + Math.abs(direction.z)) / 16;
+        for (int i = 0; i < repetition; i++)
+        {
+            addpredictionChunkTicket(new ChunkPos(((int) predictedPos.x >> 4), ((int) predictedPos.z >> 4)),
+              Math.min(config.getCommonConfig().predictionarea, viewDist + 1),
+              ((ServerLevel) player.level).getChunkSource());
+
+            predictedPos = predictedPos.add(direction.normalize().scale(16));
+        }
+
+        for (final Object2IntMap.Entry<ChunkPos> ticketEntry : oldTickets.object2IntEntrySet())
+        {
+            ((ServerChunkCache) player.level.getChunkSource()).removeRegionTicket(TICKET_PREDICTION, ticketEntry.getKey(), ticketEntry.getIntValue(), ticketEntry.getKey());
+        }
+
+        ((ServerChunkCache) player.level.getChunkSource()).runDistanceManagerUpdates();
+    }
+
+    /**
+     * Adds a chunk ticket
+     *
+     * @param pos
+     * @param level
+     * @param chunkSource
+     */
+    private void addpredictionChunkTicket(final ChunkPos pos, final int level, ServerChunkCache chunkSource)
+    {
+        chunkSource.addRegionTicket(TICKET_PREDICTION,
+          pos,
+          level,
+          pos);
+        lastTickets.put(pos, level);
     }
 }

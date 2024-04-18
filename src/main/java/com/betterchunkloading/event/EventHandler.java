@@ -1,17 +1,11 @@
 package com.betterchunkloading.event;
 
 import com.betterchunkloading.BetterChunkLoading;
-import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
+import com.betterchunkloading.chunk.IPlayerDataPlayer;
 import it.unimi.dsi.fastutil.shorts.ShortList;
-import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ServerChunkCache;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.Ticket;
-import net.minecraft.server.level.TicketType;
-import net.minecraft.util.SortedArraySet;
+import net.minecraft.server.level.*;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
@@ -21,120 +15,142 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.ProtoChunk;
 import net.minecraft.world.level.material.FluidState;
 
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.*;
 
-import static com.betterchunkloading.BetterChunkLoading.TICKET_2min;
+import static com.betterchunkloading.BetterChunkLoading.TICKET_POST_PROCESS;
 
-public class EventHandler {
+public class EventHandler
+{
+    /**
+     * Data storage for later post processing of chunk load data
+     */
+    public static ArrayDeque<ChunkInfo>    delayedLoading    = new ArrayDeque<>();
+    public static Map<ChunkPos, ChunkInfo> delayedLoadingMap = new HashMap<>();
 
-    public static Map<ChunkInfo, ShortList[]> delayedLoading = new ConcurrentHashMap<>();
-
-    public static void onServerTick(MinecraftServer server) {
-        long serverTime = server.getTickCount();
-        for (Iterator<Map.Entry<ChunkInfo, ShortList[]>> iterator = delayedLoading.entrySet().iterator(); iterator.hasNext(); ) {
-            final Map.Entry<ChunkInfo, ShortList[]> dataEntry = iterator.next();
-            if (serverTime - dataEntry.getKey().originalTime > 20 * 5
-                    && dataEntry.getKey().level.hasChunk(dataEntry.getKey().pos.x, dataEntry.getKey().pos.z)
-                    && dataEntry.getKey().level.hasChunk(dataEntry.getKey().pos.x + 1, dataEntry.getKey().pos.z)
-                    && dataEntry.getKey().level.hasChunk(dataEntry.getKey().pos.x, dataEntry.getKey().pos.z + 1)
-                    && dataEntry.getKey().level.hasChunk(dataEntry.getKey().pos.x - 1, dataEntry.getKey().pos.z)
-                    && dataEntry.getKey().level.hasChunk(dataEntry.getKey().pos.x - 1, dataEntry.getKey().pos.z - 1)) {
-                applyToChunk(dataEntry);
-                iterator.remove();
-            }
-        }
-    }
-
-    public static void printPlayerTickets(CommandSourceStack commandSourceStack)
+    public static void onServerTick(MinecraftServer server)
     {
-        for (final ServerLevel level : commandSourceStack.getServer().getAllLevels())
+        long serverTime = server.getTickCount();
+
+        int amount = 0;
+        for (Iterator<ChunkInfo> iterator = delayedLoading.iterator(); iterator.hasNext(); )
         {
-            level.getChunkSource().distanceManager.runAllUpdates(level.getChunkSource().chunkMap);
-
-            int playerTickets = 0;
-
-            for (final Long2ObjectMap.Entry<SortedArraySet<Ticket<?>>> entry : level.getChunkSource().distanceManager.tickets.long2ObjectEntrySet())
+            final ChunkInfo chunkInfo = iterator.next();
+            if (serverTime - chunkInfo.originalTime > 20
+                  && chunkInfo.level.hasChunk(chunkInfo.pos.x, chunkInfo.pos.z)
+                  && chunkInfo.level.hasChunk(chunkInfo.pos.x + 1, chunkInfo.pos.z + 1)
+                  && chunkInfo.level.hasChunk(chunkInfo.pos.x + 1, chunkInfo.pos.z)
+                  && chunkInfo.level.hasChunk(chunkInfo.pos.x + 1, chunkInfo.pos.z - 1)
+                  && chunkInfo.level.hasChunk(chunkInfo.pos.x, chunkInfo.pos.z + 1)
+                  && chunkInfo.level.hasChunk(chunkInfo.pos.x, chunkInfo.pos.z - 1)
+                  && chunkInfo.level.hasChunk(chunkInfo.pos.x - 1, chunkInfo.pos.z + 1)
+                  && chunkInfo.level.hasChunk(chunkInfo.pos.x - 1, chunkInfo.pos.z)
+                  && chunkInfo.level.hasChunk(chunkInfo.pos.x - 1, chunkInfo.pos.z - 1))
             {
-                for (final Ticket<?> ticket : entry.getValue())
+                applyToChunk(chunkInfo);
+                delayedLoadingMap.remove(chunkInfo.pos);
+                iterator.remove();
+
+                amount++;
+                if (amount > 20)
                 {
-                    if (ticket != null && ticket.getType() == TicketType.PLAYER)
-                    {
-                        playerTickets++;
-                    }
+                    return;
                 }
             }
-
-            commandSourceStack.sendSystemMessage(Component.literal("Dimension:" + level.dimension().location().toString()));
-            commandSourceStack.sendSystemMessage(Component.literal("Player tickets(viewdistance):" + playerTickets));
-            BetterChunkLoading.LOGGER.warn("Dimension:" + level.dimension().location().toString());
-            BetterChunkLoading.LOGGER.warn("Player tickets(viewdistance):" + playerTickets);
-
-            playerTickets = 0;
-            for (final Long2ObjectMap.Entry<SortedArraySet<Ticket<?>>> entry : level.getChunkSource().distanceManager.tickingTicketsTracker.tickets.long2ObjectEntrySet())
+            else if (serverTime - chunkInfo.originalTime > 20 * 60)
             {
-                for (final Ticket<?> ticket : entry.getValue())
+                if (BetterChunkLoading.IN_DEV && ((ServerLevel) chunkInfo.level).getChunkSource().distanceManager.tickets.get(chunkInfo.pos.toLong()) == null)
                 {
-                    if (ticket != null && ticket.getType() == TicketType.PLAYER)
+                    BetterChunkLoading.LOGGER.warn("Missing ticket!!!");
+
+                    ((ServerLevel) chunkInfo.level).getChunkSource().distanceManager.runAllUpdates(((ServerLevel) chunkInfo.level).getChunkSource().chunkMap);
+                    if (((ServerLevel) chunkInfo.level).getChunkSource().distanceManager.tickets.get(chunkInfo.pos.toLong()) == null)
                     {
-                        playerTickets++;
+                        BetterChunkLoading.LOGGER.warn(
+                          "Really! Missing ticket!!! time since ticket:" + (chunkInfo.level.getServer().getTickCount() - chunkInfo.originalTime));
                     }
                 }
-            }
 
-            commandSourceStack.sendSystemMessage(Component.literal("Player ticking(sim distance) tickets:" + playerTickets));
-            BetterChunkLoading.LOGGER.warn("Player ticking(sim distance) tickets:" + playerTickets);
+                applyToChunk(chunkInfo);
+                iterator.remove();
+                delayedLoadingMap.remove(chunkInfo.pos);
+                amount++;
+
+                if (amount > 20)
+                {
+                    return;
+                }
+            }
+            else
+            {
+                break;
+            }
         }
     }
 
-    private static void applyToChunk(final Map.Entry<ChunkInfo, ShortList[]> dataEntry) {
-        final LevelChunk chunk = dataEntry.getKey().level.getChunk(dataEntry.getKey().pos.x, dataEntry.getKey().pos.z);
-        for (int i = 0; i < dataEntry.getValue().length; ++i) {
-            if (dataEntry.getValue()[i] != null) {
-                for (Short oshort : dataEntry.getValue()[i]) {
-                    BlockPos blockpos = ProtoChunk.unpackOffsetCoordinates(oshort, chunk.getSectionYFromSectionIndex(i), dataEntry.getKey().pos);
+    /**
+     * Re-apply of postprocessing logic of level chunks, copy from vanilla
+     *
+     * @param chunkInfo
+     */
+    private static void applyToChunk(final ChunkInfo chunkInfo)
+    {
+        final LevelChunk chunk = chunkInfo.level.getChunk(chunkInfo.pos.x, chunkInfo.pos.z);
+        for (int i = 0; i < chunkInfo.data.length; ++i)
+        {
+            if (chunkInfo.data[i] != null)
+            {
+                for (Short oshort : chunkInfo.data[i])
+                {
+                    BlockPos blockpos = ProtoChunk.unpackOffsetCoordinates(oshort, chunk.getSectionYFromSectionIndex(i), chunkInfo.pos);
                     BlockState blockstate = chunk.getBlockState(blockpos);
                     FluidState fluidstate = blockstate.getFluidState();
-                    if (!fluidstate.isEmpty()) {
-                        fluidstate.tick(dataEntry.getKey().level, blockpos);
+                    if (!fluidstate.isEmpty())
+                    {
+                        fluidstate.tick(chunkInfo.level, blockpos);
                     }
 
-                    if (!(blockstate.getBlock() instanceof LiquidBlock)) {
-                        BlockState blockstate1 = Block.updateFromNeighbourShapes(blockstate, dataEntry.getKey().level, blockpos);
-                        dataEntry.getKey().level.setBlock(blockpos, blockstate1, 20);
+                    if (!(blockstate.getBlock() instanceof LiquidBlock))
+                    {
+                        BlockState blockstate1 = Block.updateFromNeighbourShapes(blockstate, chunkInfo.level, blockpos);
+                        chunkInfo.level.setBlock(blockpos, blockstate1, 20);
                     }
                 }
-
-                dataEntry.getValue()[i].clear();
             }
         }
 
-        ((ServerChunkCache) dataEntry.getKey().level.getChunkSource()).removeRegionTicket(TICKET_2min,
-                dataEntry.getKey().pos,
-                1,
-                dataEntry.getKey().pos);
+        ((ServerChunkCache) chunkInfo.level.getChunkSource()).distanceManager.removeTicket(TICKET_POST_PROCESS,
+          chunkInfo.pos,
+          33 - 1,
+          chunkInfo.pos);
     }
 
-    public static class ChunkInfo {
+    /**
+     * Data class for delayed post-processing
+     */
+    public static class ChunkInfo
+    {
+        private final long        originalTime;
+        private final ChunkPos    pos;
+        private final Level       level;
+        private final ShortList[] data;
 
-        private final long originalTime;
-        private final ChunkPos pos;
-        private final Level level;
-
-        public ChunkInfo(final long originalTime, final ChunkPos pos, final Level level) {
+        public ChunkInfo(final long originalTime, final ChunkPos pos, final Level level, ShortList[] data)
+        {
             this.originalTime = originalTime;
             this.pos = pos;
             this.level = level;
+            this.data = data;
         }
 
         @Override
-        public boolean equals(final Object o) {
-            if (this == o) {
+        public boolean equals(final Object o)
+        {
+            if (this == o)
+            {
                 return true;
             }
-            if (o == null || getClass() != o.getClass()) {
+            if (o == null || getClass() != o.getClass())
+            {
                 return false;
             }
             final ChunkInfo chunkInfo = (ChunkInfo) o;
@@ -142,8 +158,79 @@ public class EventHandler {
         }
 
         @Override
-        public int hashCode() {
+        public int hashCode()
+        {
             return Objects.hash(pos);
+        }
+    }
+
+    public static void onPlayerTick(final ServerPlayer player)
+    {
+        if (player.tickCount % 3 == 0)
+        {
+            if (player instanceof IPlayerDataPlayer dataPlayer && player.getClass() == ServerPlayer.class)
+            {
+                dataPlayer.betterchunkloading$getPlayerChunkData().onChunkChanged((ServerPlayer) player);
+            }
+        }
+    }
+
+    public static void onPlayerLogout(final ServerPlayer player)
+    {
+        if (player instanceof IPlayerDataPlayer dataPlayer)
+        {
+            dataPlayer.betterchunkloading$getPlayerChunkData().onLogout(player);
+        }
+    }
+
+    /**
+     * Debugging Utils
+     */
+
+    static Map<ChunkPos, Integer> recentlyLoadedTimes   = new HashMap<>();
+    static Map<ChunkPos, Integer> recentlyUnLoadedTimes = new HashMap<>();
+
+    public static void onChunkLoad(final ServerLevel level, final LevelChunk chunk)
+    {
+        if (!BetterChunkLoading.IN_DEV)
+        {
+            return;
+        }
+
+        boolean sr = false;
+
+        sr |= level.hasChunk(chunk.getPos().x + 1, chunk.getPos().z);
+        sr |= level.hasChunk(chunk.getPos().x, chunk.getPos().z + 1);
+        sr |= level.hasChunk(chunk.getPos().x - 1, chunk.getPos().z);
+        sr |= level.hasChunk(chunk.getPos().x, chunk.getPos().z - 1);
+
+        if (!sr)
+        {
+            BetterChunkLoading.LOGGER.warn("no surrounding chunk!");
+        }
+
+        recentlyLoadedTimes.put(chunk.getPos(), level.getServer().getTickCount());
+
+        if (recentlyUnLoadedTimes.containsKey(chunk.getPos())
+              && level.getServer().getTickCount() - recentlyUnLoadedTimes.get(chunk.getPos()) < 100)
+        {
+            BetterChunkLoading.LOGGER.warn("Loaded shortly after unload:" + chunk.getPos());
+        }
+    }
+
+    public static void onChunkUnLoad(final ServerLevel level, final LevelChunk chunk)
+    {
+        if (!BetterChunkLoading.IN_DEV)
+        {
+            return;
+        }
+
+        recentlyUnLoadedTimes.put(chunk.getPos(), level.getServer().getTickCount());
+
+        if (recentlyLoadedTimes.containsKey(chunk.getPos())
+              && level.getServer().getTickCount() - recentlyLoadedTimes.get(chunk.getPos()) < 100)
+        {
+            BetterChunkLoading.LOGGER.warn("UnLoaded shortly after load:" + chunk.getPos());
         }
     }
 }

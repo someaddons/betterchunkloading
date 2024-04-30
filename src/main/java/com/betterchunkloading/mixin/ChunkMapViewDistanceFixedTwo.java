@@ -1,13 +1,14 @@
 package com.betterchunkloading.mixin;
 
 import com.betterchunkloading.BetterChunkLoading;
+import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.DistanceManager;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 
-@Mixin(DistanceManager.class)
-public class ChunkMapViewDistanceFixed
+@Mixin(ChunkMap.class)
+public class ChunkMapViewDistanceFixedTwo
 {
     /**
      * View distance handled by vanilla is 4, we handle further tickets ourselves
@@ -15,7 +16,7 @@ public class ChunkMapViewDistanceFixed
      * @param distance
      * @return
      */
-    @ModifyArg(method = "updatePlayerTickets", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/DistanceManager$PlayerTicketTracker;updateViewDistance(I)V"), index = 0, require = 0)
+    @ModifyArg(method = "setViewDistance", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ChunkMap$DistanceManager;updatePlayerTickets(I)V"), index = 0, require = 0)
     private int onSetViewDistance(int distance)
     {
         if (BetterChunkLoading.config.getCommonConfig().enableSmartChunkLoading)

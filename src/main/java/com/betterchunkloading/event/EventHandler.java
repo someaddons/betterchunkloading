@@ -24,12 +24,44 @@ public class EventHandler
     /**
      * Data storage for later post processing of chunk load data
      */
-    public static ArrayDeque<ChunkInfo>    delayedLoading    = new ArrayDeque<>();
-    public static Map<ChunkPos, ChunkInfo> delayedLoadingMap = new HashMap<>();
+    private static ArrayDeque<ChunkInfo>    delayedLoading    = new ArrayDeque<>();
+    private static  Map<ChunkPos, ChunkInfo> delayedLoadingMap = new HashMap<>();
+    private static List<ChunkInfo> toadd = new ArrayList<>();
+
+    /**
+     * Adds or queues to add a chunk info
+     *
+     * @param info
+     */
+    public static void addChunkToQueue(final ChunkInfo info)
+    {
+        if (info.level.getServer() != null && !info.level.getServer().isSameThread())
+        {
+            info.level.getServer().submit(() -> addChunkToQueue(info));
+        }
+        else
+        {
+            if (BetterChunkLoading.IN_DEV && EventHandler.delayedLoadingMap.containsKey(info.pos))
+            {
+                BetterChunkLoading.LOGGER.error("processing chunk twice!", new Exception());
+            }
+            toadd.add(info);
+        }
+    }
 
     public static void onServerTick(MinecraftServer server)
     {
         long serverTime = server.getTickCount();
+        for(final ChunkInfo info: toadd)
+        {
+            delayedLoadingMap.put(info.pos, info);
+            delayedLoading.offer(info);
+        }
+
+        if (!toadd.isEmpty())
+        {
+            toadd = new ArrayList<>();
+        }
 
         int amount = 0;
         for (Iterator<ChunkInfo> iterator = delayedLoading.iterator(); iterator.hasNext(); )

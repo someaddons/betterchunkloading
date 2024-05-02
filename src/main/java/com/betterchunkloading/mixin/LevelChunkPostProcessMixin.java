@@ -97,23 +97,11 @@ public abstract class LevelChunkPostProcessMixin extends ChunkAccess
                       ChunkLevel.byStatus(FullChunkStatus.FULL) - 1,
                       chunkPos);
 
-                    if (BetterChunkLoading.IN_DEV && EventHandler.delayedLoadingMap.containsKey(chunkPos))
-                    {
-                        BetterChunkLoading.LOGGER.error("processing chunk twice!", new Exception());
-                    }
-
                     EventHandler.ChunkInfo info = new EventHandler.ChunkInfo(level.getServer().getTickCount(),
                       chunkPos,
                       level,
                       Arrays.copyOf(postProcessing, postProcessing.length));
-                    EventHandler.delayedLoading.offerLast(info);
-
-                    if (Thread.currentThread() != level.getServer().getRunningThread())
-                    {
-                        BetterChunkLoading.LOGGER.warn("Offthread postprocess!", new Exception());
-                    }
-
-                    EventHandler.delayedLoadingMap.put(chunkPos, info);
+                    EventHandler.addChunkToQueue(info);
                     Arrays.fill(this.postProcessing, null);
                     break;
                 }

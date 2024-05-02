@@ -2,15 +2,9 @@ package com.betterchunkloading.event;
 
 import com.betterchunkloading.BetterChunkLoading;
 import com.betterchunkloading.chunk.IPlayerDataPlayer;
-import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.shorts.ShortList;
-import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.*;
-import net.minecraft.util.SortedArraySet;
-import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
@@ -18,13 +12,11 @@ import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.ProtoChunk;
-import net.minecraft.world.level.chunk.storage.RegionFileStorage;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.level.ChunkEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.loading.FMLEnvironment;
 
 import java.util.*;
 
@@ -35,14 +27,47 @@ public class EventHandler
     /**
      * Data storage for later post processing of chunk load data
      */
-    public static  ArrayDeque<ChunkInfo>                      delayedLoading    = new ArrayDeque<>();
-    public static  Map<ChunkPos, ChunkInfo>                   delayedLoadingMap = new HashMap<>();
+    private static ArrayDeque<ChunkInfo>    delayedLoading    = new ArrayDeque<>();
+    private static  Map<ChunkPos, ChunkInfo> delayedLoadingMap = new HashMap<>();
+    private static List<ChunkInfo> toadd = new ArrayList<>();
+
+    /**
+     * Adds or queues to add a chunk info
+     *
+     * @param info
+     */
+    public static void addChunkToQueue(final ChunkInfo info)
+    {
+        if (info.level.getServer() != null && !info.level.getServer().isSameThread())
+        {
+            info.level.getServer().submit(() -> addChunkToQueue(info));
+        }
+        else
+        {
+            if (BetterChunkLoading.IN_DEV && EventHandler.delayedLoadingMap.containsKey(info.pos))
+            {
+                BetterChunkLoading.LOGGER.error("processing chunk twice!", new Exception());
+            }
+            toadd.add(info);
+        }
+    }
 
     @SubscribeEvent()
     public static void onServerTick(TickEvent.ServerTickEvent event)
     {
         if (event.phase == TickEvent.Phase.END)
         {
+            for(final ChunkInfo info: toadd)
+            {
+                delayedLoadingMap.put(info.pos, info);
+                delayedLoading.offer(info);
+            }
+
+            if (!toadd.isEmpty())
+            {
+                toadd = new ArrayList<>();
+            }
+
             long serverTime = event.getServer().getTickCount();
 
             int amount = 0;

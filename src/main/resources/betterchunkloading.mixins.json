@@ -9,7 +9,6 @@
     "ChunkMapViewDistanceFixed",
     "ChunkMapViewDistanceFixedTwo",
     "PlayerChunkDataMixin",
-    "RegionFileStorageMixin",
     "PlayerMovementNoUnloaded",
     "PathRecomputeChunkLoadPrevention",
     "ChunkTaskPriorityQueueSorterMixin"

@@ -49,7 +49,7 @@ public class Command
               .then(Commands.argument("position", BlockPosArgument.blockPos())
                 .executes(context ->
                 {
-                    final BlockPos viewDist =  ((Coordinates)context.getArgument("position", Coordinates.class)).getBlockPos((CommandSourceStack)context.getSource());;
+                    final BlockPos viewDist =  ((Coordinates)context.getArgument("position", Coordinates.class)).getBlockPos((CommandSourceStack)context.getSource());
 
                     ChunkPos currentChunk = new ChunkPos(viewDist.getX() >> 4, viewDist.getZ() >> 4);
                     final RegionFileStorage storage = ((IOWorker) context.getSource().getLevel().getChunkSource().chunkMap.chunkScanner()).storage;

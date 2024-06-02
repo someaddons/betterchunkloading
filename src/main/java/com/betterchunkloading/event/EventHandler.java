@@ -112,12 +112,7 @@ public class EventHandler
                     applyToChunk(chunkInfo);
                     iterator.remove();
                     delayedLoadingMap.remove(chunkInfo.pos);
-                    amount++;
-
-                    if (amount > 20)
-                    {
-                        return;
-                    }
+                    return;
                 }
                 else
                 {
@@ -209,7 +204,7 @@ public class EventHandler
     {
         if (!event.player.level().isClientSide)
         {
-            if (event.player.tickCount % 3 == 0)
+            if (event.player.tickCount % 3 == 0 && event.phase == TickEvent.Phase.END)
             {
                 if (event.player instanceof IPlayerDataPlayer dataPlayer && event.player.getClass() == ServerPlayer.class)
                 {

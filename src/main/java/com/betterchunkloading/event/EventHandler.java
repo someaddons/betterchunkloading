@@ -105,12 +105,7 @@ public class EventHandler
                 applyToChunk(chunkInfo);
                 iterator.remove();
                 delayedLoadingMap.remove(chunkInfo.pos);
-                amount++;
-
-                if (amount > 20)
-                {
-                    return;
-                }
+                return;
             }
             else
             {

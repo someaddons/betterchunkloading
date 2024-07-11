@@ -15,7 +15,7 @@ public class ChunkMapViewDistanceFixedTwo
      * @param distance
      * @return
      */
-    @ModifyArg(method = "setViewDistance", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ChunkMap$DistanceManager;updatePlayerTickets(I)V"), index = 0, require = 0)
+    @ModifyArg(method = "setServerViewDistance", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ChunkMap$DistanceManager;updatePlayerTickets(I)V"), index = 0, require = 0)
     private int onSetViewDistance(int distance)
     {
         if (BetterChunkLoading.config.getCommonConfig().enableSmartChunkLoading)

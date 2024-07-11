@@ -2,7 +2,6 @@ package com.betterchunkloading.mixin;
 
 import com.betterchunkloading.BetterChunkLoading;
 import net.minecraft.client.Options;
-import net.minecraftforge.fml.loading.FMLEnvironment;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;

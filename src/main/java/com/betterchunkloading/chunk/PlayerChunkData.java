@@ -278,11 +278,11 @@ public class PlayerChunkData
         {
             if (playerMovement.length() <= 40 * config.getCommonConfig().smartChunkLoadModifier)
             {
-                viewDistance = chunkSource.chunkMap.viewDistance;
+                viewDistance = chunkSource.chunkMap.serverViewDistance;
             }
             else
             {
-                viewDistance = (int) ((1.0 - (playerMovement.length() - 40) / (80 * config.getCommonConfig().smartChunkLoadModifier)) * chunkSource.chunkMap.viewDistance);
+                viewDistance = (int) ((1.0 - (playerMovement.length() - 40) / (80 * config.getCommonConfig().smartChunkLoadModifier)) * chunkSource.chunkMap.serverViewDistance);
             }
         }
 
@@ -371,7 +371,7 @@ public class PlayerChunkData
     private void checkPrediction(final Vec3 direction, final Vec3 currentPos, final ServerPlayer player)
     {
         final int viewDist =
-          config.getCommonConfig().enableSmartChunkLoading ? playerChunkLoadViewDistance : ((ServerChunkCache) player.level().getChunkSource()).chunkMap.viewDistance;
+          config.getCommonConfig().enableSmartChunkLoading ? playerChunkLoadViewDistance : ((ServerChunkCache) player.level().getChunkSource()).chunkMap.serverViewDistance;
         Vec3 predictedPos = currentPos.add(direction.normalize().scale(16 * (viewDist * 0.7)));
 
         for (int i = 0; i < 30 && !player.level().hasChunk((int) predictedPos.x >> 4, (int) predictedPos.z >> 4); i++)

@@ -1,6 +1,6 @@
 package com.betterchunkloading;
 
-import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
+import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 
 public class BetterChunkLoadingClient
 {

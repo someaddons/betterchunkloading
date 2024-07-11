@@ -12,7 +12,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.*;
 import net.minecraft.util.SortedArraySet;
 import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.chunk.ChunkStatus;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.chunk.storage.IOWorker;
 import net.minecraft.world.level.chunk.storage.RegionFileStorage;
 

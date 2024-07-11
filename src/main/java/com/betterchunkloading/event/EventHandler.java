@@ -13,10 +13,11 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.ProtoChunk;
 import net.minecraft.world.level.material.FluidState;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.event.entity.player.PlayerEvent;
-import net.minecraftforge.event.level.ChunkEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.neoforged.neoforge.event.level.ChunkEvent;
+import net.neoforged.neoforge.event.tick.PlayerTickEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 import java.util.*;
 
@@ -28,8 +29,8 @@ public class EventHandler
      * Data storage for later post processing of chunk load data
      */
     private static ArrayDeque<ChunkInfo>    delayedLoading    = new ArrayDeque<>();
-    private static  Map<ChunkPos, ChunkInfo> delayedLoadingMap = new HashMap<>();
-    private static List<ChunkInfo> toadd = new ArrayList<>();
+    private static Map<ChunkPos, ChunkInfo> delayedLoadingMap = new HashMap<>();
+    private static List<ChunkInfo>          toadd             = new ArrayList<>();
 
     /**
      * Adds or queues to add a chunk info
@@ -53,71 +54,68 @@ public class EventHandler
     }
 
     @SubscribeEvent()
-    public static void onServerTick(TickEvent.ServerTickEvent event)
+    public static void onServerTick(ServerTickEvent.Post event)
     {
-        if (event.phase == TickEvent.Phase.END)
+        for (final ChunkInfo info : toadd)
         {
-            for(final ChunkInfo info: toadd)
-            {
-                delayedLoadingMap.put(info.pos, info);
-                delayedLoading.offer(info);
-            }
+            delayedLoadingMap.put(info.pos, info);
+            delayedLoading.offer(info);
+        }
 
-            if (!toadd.isEmpty())
-            {
-                toadd = new ArrayList<>();
-            }
+        if (!toadd.isEmpty())
+        {
+            toadd = new ArrayList<>();
+        }
 
-            long serverTime = event.getServer().getTickCount();
+        long serverTime = event.getServer().getTickCount();
 
-            int amount = 0;
-            for (Iterator<ChunkInfo> iterator = delayedLoading.iterator(); iterator.hasNext(); )
+        int amount = 0;
+        for (Iterator<ChunkInfo> iterator = delayedLoading.iterator(); iterator.hasNext(); )
+        {
+            final ChunkInfo chunkInfo = iterator.next();
+            if (serverTime - chunkInfo.originalTime > 20
+                  && chunkInfo.level.hasChunk(chunkInfo.pos.x, chunkInfo.pos.z)
+                  && chunkInfo.level.hasChunk(chunkInfo.pos.x + 1, chunkInfo.pos.z + 1)
+                  && chunkInfo.level.hasChunk(chunkInfo.pos.x + 1, chunkInfo.pos.z)
+                  && chunkInfo.level.hasChunk(chunkInfo.pos.x + 1, chunkInfo.pos.z - 1)
+                  && chunkInfo.level.hasChunk(chunkInfo.pos.x, chunkInfo.pos.z + 1)
+                  && chunkInfo.level.hasChunk(chunkInfo.pos.x, chunkInfo.pos.z - 1)
+                  && chunkInfo.level.hasChunk(chunkInfo.pos.x - 1, chunkInfo.pos.z + 1)
+                  && chunkInfo.level.hasChunk(chunkInfo.pos.x - 1, chunkInfo.pos.z)
+                  && chunkInfo.level.hasChunk(chunkInfo.pos.x - 1, chunkInfo.pos.z - 1))
             {
-                final ChunkInfo chunkInfo = iterator.next();
-                if (serverTime - chunkInfo.originalTime > 20
-                      && chunkInfo.level.hasChunk(chunkInfo.pos.x, chunkInfo.pos.z)
-                      && chunkInfo.level.hasChunk(chunkInfo.pos.x + 1, chunkInfo.pos.z + 1)
-                      && chunkInfo.level.hasChunk(chunkInfo.pos.x + 1, chunkInfo.pos.z)
-                      && chunkInfo.level.hasChunk(chunkInfo.pos.x + 1, chunkInfo.pos.z - 1)
-                      && chunkInfo.level.hasChunk(chunkInfo.pos.x, chunkInfo.pos.z + 1)
-                      && chunkInfo.level.hasChunk(chunkInfo.pos.x, chunkInfo.pos.z - 1)
-                      && chunkInfo.level.hasChunk(chunkInfo.pos.x - 1, chunkInfo.pos.z + 1)
-                      && chunkInfo.level.hasChunk(chunkInfo.pos.x - 1, chunkInfo.pos.z)
-                      && chunkInfo.level.hasChunk(chunkInfo.pos.x - 1, chunkInfo.pos.z - 1))
+                applyToChunk(chunkInfo);
+                delayedLoadingMap.remove(chunkInfo.pos);
+                iterator.remove();
+
+                amount++;
+                if (amount > 20)
                 {
-                    applyToChunk(chunkInfo);
-                    delayedLoadingMap.remove(chunkInfo.pos);
-                    iterator.remove();
-
-                    amount++;
-                    if (amount > 20)
-                    {
-                        return;
-                    }
-                }
-                else if (serverTime - chunkInfo.originalTime > 20 * 60)
-                {
-                    if (BetterChunkLoading.IN_DEV && ((ServerLevel) chunkInfo.level).getChunkSource().distanceManager.tickets.get(chunkInfo.pos.toLong()) == null)
-                    {
-                        BetterChunkLoading.LOGGER.warn("Missing ticket!!!");
-
-                        ((ServerLevel) chunkInfo.level).getChunkSource().distanceManager.runAllUpdates(((ServerLevel) chunkInfo.level).getChunkSource().chunkMap);
-                        if (((ServerLevel) chunkInfo.level).getChunkSource().distanceManager.tickets.get(chunkInfo.pos.toLong()) == null)
-                        {
-                            BetterChunkLoading.LOGGER.warn(
-                              "Really! Missing ticket!!! time since ticket:" + (chunkInfo.level.getServer().getTickCount() - chunkInfo.originalTime));
-                        }
-                    }
-
-                    applyToChunk(chunkInfo);
-                    iterator.remove();
-                    delayedLoadingMap.remove(chunkInfo.pos);
                     return;
                 }
-                else
+            }
+            else if (serverTime - chunkInfo.originalTime > 20 * 60)
+            {
+                if (BetterChunkLoading.IN_DEV && ((ServerLevel) chunkInfo.level).getChunkSource().distanceManager.tickets.get(chunkInfo.pos.toLong()) == null)
                 {
-                    break;
+                    BetterChunkLoading.LOGGER.warn("Missing ticket!!!");
+
+                    ((ServerLevel) chunkInfo.level).getChunkSource().distanceManager.runAllUpdates(((ServerLevel) chunkInfo.level).getChunkSource().chunkMap);
+                    if (((ServerLevel) chunkInfo.level).getChunkSource().distanceManager.tickets.get(chunkInfo.pos.toLong()) == null)
+                    {
+                        BetterChunkLoading.LOGGER.warn(
+                          "Really! Missing ticket!!! time since ticket:" + (chunkInfo.level.getServer().getTickCount() - chunkInfo.originalTime));
+                    }
                 }
+
+                applyToChunk(chunkInfo);
+                iterator.remove();
+                delayedLoadingMap.remove(chunkInfo.pos);
+                return;
+            }
+            else
+            {
+                break;
             }
         }
     }
@@ -200,18 +198,15 @@ public class EventHandler
     }
 
     @SubscribeEvent
-    public static void onPlayerTick(TickEvent.PlayerTickEvent event)
+    public static void onPlayerTick(PlayerTickEvent.Post event)
     {
-        if (!event.player.level().isClientSide)
-        {
-            if (event.player.tickCount % 3 == 0 && event.phase == TickEvent.Phase.END)
+            if (event.getEntity().tickCount % 3 == 0)
             {
-                if (event.player instanceof IPlayerDataPlayer dataPlayer && event.player.getClass() == ServerPlayer.class)
+                if (event.getEntity() instanceof IPlayerDataPlayer dataPlayer && event.getEntity().getClass() == ServerPlayer.class)
                 {
-                    dataPlayer.betterchunkloading$getPlayerChunkData().onChunkChanged((ServerPlayer) event.player);
+                    dataPlayer.betterchunkloading$getPlayerChunkData().onChunkChanged((ServerPlayer) event.getEntity());
                 }
             }
-        }
     }
 
     @SubscribeEvent

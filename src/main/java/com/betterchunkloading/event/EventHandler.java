@@ -90,7 +90,7 @@ public class EventHandler
                     iterator.remove();
 
                     amount++;
-                    if (amount > 20)
+                    if (amount > 10)
                     {
                         return;
                     }
@@ -147,7 +147,7 @@ public class EventHandler
                     if (!(blockstate.getBlock() instanceof LiquidBlock))
                     {
                         BlockState blockstate1 = Block.updateFromNeighbourShapes(blockstate, chunkInfo.level, blockpos);
-                        chunkInfo.level.setBlock(blockpos, blockstate1, 20);
+                        chunkInfo.level.setBlock(blockpos, blockstate1, 3);
                     }
                 }
             }

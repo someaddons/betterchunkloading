@@ -78,7 +78,7 @@ public class PlayerChunkData
         {
             lastLevel = player.level().dimension();
 
-            setPlayerViewDistTo(null, player.level().getServer().getLevel(lastLevel).getChunkSource(), 0);
+            setPlayerViewDistTo(null, player.level().getServer().getLevel(lastLevel).getChunkSource(), 4);
             playerChunkLoadViewDistance = 4;
             playerChunkLoadCenter = null;
 
@@ -95,7 +95,7 @@ public class PlayerChunkData
         if (lastChunk != null && player.chunkPosition().getChessboardDistance(lastChunk) > 10)
         {
             // Reset tracking
-            setPlayerViewDistTo(player.chunkPosition(), (ServerChunkCache) player.level().getChunkSource(), 0);
+            setPlayerViewDistTo(player.chunkPosition(), (ServerChunkCache) player.level().getChunkSource(), 4);
             playerChunkLoadViewDistance = 4;
             playerChunkLoadCenter = null;
 

@@ -4,6 +4,7 @@ import com.betterchunkloading.BetterChunkLoading;
 import com.betterchunkloading.chunk.IPlayerDataPlayer;
 import it.unimi.dsi.fastutil.shorts.ShortList;
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.*;
 import net.minecraft.world.level.ChunkPos;
@@ -16,6 +17,7 @@ import net.minecraft.world.level.chunk.ProtoChunk;
 import net.minecraft.world.level.material.FluidState;
 
 import java.util.*;
+import java.util.function.Predicate;
 
 import static com.betterchunkloading.BetterChunkLoading.TICKET_POST_PROCESS;
 
@@ -27,6 +29,10 @@ public class EventHandler
     private static ArrayDeque<ChunkInfo>    delayedLoading    = new ArrayDeque<>();
     private static  Map<ChunkPos, ChunkInfo> delayedLoadingMap = new HashMap<>();
     private static List<ChunkInfo> toadd = new ArrayList<>();
+
+    private static int tickTimer = 0;
+    public static int      MSTP         = 0;
+    public volatile static ChunkPos loadingChunk = null;
 
     /**
      * Adds or queues to add a chunk info
@@ -56,6 +62,13 @@ public class EventHandler
         {
             delayedLoadingMap.put(info.pos, info);
             delayedLoading.offer(info);
+        }
+
+        tickTimer++;
+        if (tickTimer >= 40)
+        {
+            tickTimer = 0;
+            MSTP = (int) (average(server.getTickTimesNanos()) * 1.0E-6D);
         }
 
         if (!toadd.isEmpty())
@@ -197,10 +210,25 @@ public class EventHandler
         {
             if (player instanceof IPlayerDataPlayer dataPlayer && player.getClass() == ServerPlayer.class)
             {
-                dataPlayer.betterchunkloading$getPlayerChunkData().onChunkChanged((ServerPlayer) player);
+                dataPlayer.betterchunkloading$getPlayerChunkData().onChunkChanged(player, null);
+            }
+
+            if (!BetterChunkLoading.IN_DEV)
+            {
+                return;
+            }
+
+            if (player.level().getGameTime() % (20 * 10) == 0)
+            {
+                BetterChunkLoading.LOGGER.warn("Loaded chunks: " + loadedChunks + " unloaded: " + unloadedChunks+" total:"+ player.level().getChunkSource().getLoadedChunksCount());
+                loadedChunks = 0;
+                unloadedChunks = 0;
             }
         }
     }
+
+    private static int loadedChunks = 0;
+    private static int unloadedChunks = 0;
 
     public static void onPlayerLogout(final ServerPlayer player)
     {
@@ -208,6 +236,8 @@ public class EventHandler
         {
             dataPlayer.betterchunkloading$getPlayerChunkData().onLogout(player);
         }
+        recentlyLoadedTimes = new HashMap<>();
+        recentlyUnLoadedTimes = new HashMap<>();
     }
 
     /**
@@ -224,6 +254,13 @@ public class EventHandler
             return;
         }
 
+        loadedChunks++;
+        if (loadingChunk != null)
+        {
+            BetterChunkLoading.LOGGER.warn("Loading chunk while stalled:" + chunk.getPos());
+            EventHandler.loadingChunk = null;
+        }
+
         boolean sr = false;
 
         sr |= level.hasChunk(chunk.getPos().x + 1, chunk.getPos().z);
@@ -236,7 +273,12 @@ public class EventHandler
             BetterChunkLoading.LOGGER.warn("no surrounding chunk!");
         }
 
-        recentlyLoadedTimes.put(chunk.getPos(), level.getServer().getTickCount());
+        Integer prev = recentlyLoadedTimes.put(chunk.getPos(), level.getServer().getTickCount());
+
+        if (prev != null && level.getServer().getTickCount() - prev < 100)
+        {
+            BetterChunkLoading.LOGGER.warn("Loaded shortly again:" + chunk.getPos());
+        }
 
         if (recentlyUnLoadedTimes.containsKey(chunk.getPos())
               && level.getServer().getTickCount() - recentlyUnLoadedTimes.get(chunk.getPos()) < 100)
@@ -254,10 +296,75 @@ public class EventHandler
 
         recentlyUnLoadedTimes.put(chunk.getPos(), level.getServer().getTickCount());
 
+        unloadedChunks++;
+        recentlyUnLoadedTimes.put(chunk.getPos(), level.getServer().getTickCount());
+
         if (recentlyLoadedTimes.containsKey(chunk.getPos())
               && level.getServer().getTickCount() - recentlyLoadedTimes.get(chunk.getPos()) < 100)
         {
             BetterChunkLoading.LOGGER.warn("UnLoaded shortly after load:" + chunk.getPos());
         }
+    }
+
+    private static Map<ResourceKey<Level>, List<ITickingTask>> taskMap = new HashMap<>();
+    
+    public static void onLevelTick(ServerLevel level)
+    {
+            var tasks = taskMap.get(level.dimension());
+            if (tasks != null && !tasks.isEmpty())
+            {
+                for (Iterator<ITickingTask> iterator = tasks.iterator(); iterator.hasNext();)
+                {
+                    final ITickingTask task = iterator.next();
+                    if (task.tick())
+                    {
+                        iterator.remove();
+                    }
+                }
+            }
+    }
+
+    public static void addTickingTask(final ResourceKey<Level> levelID, final ITickingTask task)
+    {
+        List<ITickingTask> taskList = taskMap.get(levelID);
+        if (taskList == null)
+        {
+            taskList = new ArrayList<>();
+        }
+
+        taskList.add(task);
+        taskMap.put(levelID, taskList);
+    }
+
+    public static void removeTickingTask(final ResourceKey<Level> levelID, Predicate<ITickingTask> matcher)
+    {
+        List<ITickingTask> taskList = taskMap.get(levelID);
+        if (taskList == null)
+        {
+            return;
+        }
+
+        taskList.removeIf(matcher);
+    }
+
+    /**
+     * Averages the arrays values.
+     *
+     * @param values
+     * @return
+     */
+    private static long average(long[] values)
+    {
+        if (values == null || values.length == 0)
+        {
+            return 0L;
+        }
+
+        long sum = 0L;
+        for (long v : values)
+        {
+            sum += v;
+        }
+        return sum / values.length;
     }
 }

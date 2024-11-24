@@ -20,7 +20,7 @@ public class ChunkMapViewDistanceFixed
     {
         if (BetterChunkLoading.config.getCommonConfig().enableSmartChunkLoading)
         {
-            return 5;
+            return 3;
         }
         else
         {

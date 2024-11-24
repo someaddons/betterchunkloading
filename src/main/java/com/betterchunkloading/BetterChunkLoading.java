@@ -27,15 +27,13 @@ public class BetterChunkLoading implements ModInitializer
     public static CupboardConfig<CommonConfiguration> config = new CupboardConfig<>("betterchunkloading", new CommonConfiguration());
 
     public static final TicketType<ChunkPos> TICKET_POST_PROCESS      = TicketType.create("betterchunkloadingpostprocess", Comparator.comparingLong(ChunkPos::toLong), 20 * 60 * 5);
-    public static final TicketType<ChunkPos> TICKET_PREDICTION        = TicketType.create("betterchunkloadingprediction", Comparator.comparingLong(ChunkPos::toLong), 20 * 60 * 1);
-    public static final TicketType<ChunkPos> TICKET_PLAYER_CHUNK_AREA =
-      TicketType.create("betterchunkloadingplayerchunk", Comparator.comparingLong(ChunkPos::toLong), 20 * 60 * 20);
 
     public static boolean IN_DEV = FabricLoader.getInstance().isDevelopmentEnvironment();
 
     public BetterChunkLoading()
     {
         ServerTickEvents.END_SERVER_TICK.register(EventHandler::onServerTick);
+        ServerTickEvents.END_WORLD_TICK.register(EventHandler::onLevelTick);
         CommandRegistrationCallback.EVENT.register((c, o, b) -> c.register(new Command().build()));
         ServerChunkEvents.CHUNK_LOAD.register(EventHandler::onChunkLoad);
         ServerChunkEvents.CHUNK_UNLOAD.register(EventHandler::onChunkUnLoad);

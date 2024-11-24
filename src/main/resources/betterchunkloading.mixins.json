@@ -8,11 +8,13 @@
     "LevelChunkPostProcessMixin",
     "ChunkMapViewDistanceFixed",
     "ChunkMapViewDistanceFixedTwo",
-    "PlayerChunkDataMixin",
-    "RegionFileStorageMixin",
-    "PlayerMovementNoUnloaded",
+    "ChunkTaskPriorityQueueMixin",
+    "ChunkTaskPriorityQueueSorterMixin",
     "PathRecomputeChunkLoadPrevention",
-    "ChunkTaskPriorityQueueSorterMixin"
+    "PlayerChunkDataMixin",
+    "PlayerMovementNoUnloaded",
+    "RegionFileStorageMixin",
+    "ServerChunkCacheMixin"
   ],
   "client": [
     "OptionsDevMixin"

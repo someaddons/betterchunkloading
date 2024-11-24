@@ -1,18 +1,21 @@
 package com.betterchunkloading.chunk;
 
 import com.betterchunkloading.BetterChunkLoading;
-import it.unimi.dsi.fastutil.objects.Object2IntMap;
-import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
+import com.betterchunkloading.event.EventHandler;
+import com.betterchunkloading.event.ITickingTask;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.server.level.ServerChunkCache;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.*;
+import net.minecraft.util.SortedArraySet;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
-import static com.betterchunkloading.BetterChunkLoading.*;
+import java.util.*;
+
+import static com.betterchunkloading.BetterChunkLoading.LOGGER;
+import static com.betterchunkloading.BetterChunkLoading.config;
 
 public class PlayerChunkData
 {
@@ -26,29 +29,38 @@ public class PlayerChunkData
     };
 
     /**
-     * Last chunk pos of the player
+     * Ticket types per player
      */
-    private ChunkPos lastChunk = INVALID;
+    private final TicketType<ChunkPos> chunkloadTicketType;
+    private final TicketType<ChunkPos> predictionTicketType;
 
-    private ResourceKey<Level> lastLevel = null;
+    public PlayerChunkData(final ServerPlayer player)
+    {
+        chunkloadTicketType = TicketType.create("bcl_player_" + player.getName().getString(), Comparator.comparingLong(ChunkPos::toLong), 20 * 60 * 20);
+        predictionTicketType = TicketType.create("bcl_pred_player_" + player.getName().getString(), Comparator.comparingLong(ChunkPos::toLong), 20 * 60 * 1);
+    }
 
     /**
-     * The tickets we issued
+     * Last chunk pos of the player
      */
-    private Object2IntOpenHashMap<ChunkPos> lastTickets = new Object2IntOpenHashMap();
+    private ChunkPos           lastChunk = INVALID;
+    private ResourceKey<Level> lastLevel = null;
 
     /**
      * Tracking for the view area
      */
-    private ChunkPos playerChunkLoadCenter       = null;
-    private ChunkPos playerChunkLoadLastPos      = null;
-    private int      playerChunkLoadViewDistance = 0;
+    private ChunkLoadingTask viewDistLoadTask            = null;
+    private int              playerChunkLoadViewDistance = 0;
+
+    /**
+     * Chunk loading task for predicion area
+     */
+    ChunkLoadingTask predictionTask = null;
 
     /**
      * Tracks player movement and speed
      */
     private BlockPos[] playerMovementTracker      = new BlockPos[6];
-    private ChunkPos   playerMovementTrackerAvg   = INVALID;
     private int        playerMovementTrackerIndex = 0;
 
     private long     lastPlayerMovementUpdate = 0;
@@ -60,75 +72,93 @@ public class PlayerChunkData
      */
     private Vec3 direction = Vec3.ZERO;
 
-    public boolean isFrozen = false;
-
     /**
      * Movement/Interval callback
      *
      * @param player
      */
-    public void onChunkChanged(ServerPlayer player)
+    public void onChunkChanged(ServerPlayer player, ChunkPos chunkPos)
     {
         if (player == null || player.getClass() != ServerPlayer.class)
         {
             return;
         }
 
+        if (chunkPos == null)
+        {
+            chunkPos = player.chunkPosition();
+        }
+
         if (!player.level().dimension().equals(lastLevel))
         {
-            lastLevel = player.level().dimension();
+            if (lastLevel != null)
+            {
+                if (predictionTask != null)
+                {
+                    predictionTask.cancel();
+                    predictionTask = null;
+                }
+            }
 
-            setPlayerViewDistTo(null, player.level().getServer().getLevel(lastLevel).getChunkSource(), 4);
+            // Low view distance for starting in new place
+            updatePlayerViewDistance(chunkPos, (ServerChunkCache) player.level().getChunkSource(), 4, chunkloadTicketType);
+
             playerChunkLoadViewDistance = 4;
-            playerChunkLoadCenter = null;
 
             playerMovementTracker = new BlockPos[6];
-            playerMovementTrackerAvg = INVALID;
             playerMovementTrackerIndex = 0;
             lastPlayerMovementUpdate = 0;
             lastPlayerPos = null;
             playerMovementSpeed = 0;
+            direction = Vec3.ZERO;
 
+            lastLevel = player.level().dimension();
             lastChunk = null;
+            return;
         }
-
-        if (lastChunk != null && player.chunkPosition().getChessboardDistance(lastChunk) > 10)
+        else if (lastChunk != null && chunkPos.getChessboardDistance(lastChunk) > 10)
         {
             // Reset tracking
-            setPlayerViewDistTo(player.chunkPosition(), (ServerChunkCache) player.level().getChunkSource(), 4);
-            playerChunkLoadViewDistance = 4;
-            playerChunkLoadCenter = null;
+            // Tickets are one task, as thus large tickets can stall the server for a while, e.g. when teleporting and a smaller ticket is issued -> less prio. Instead use small ticks and add them via ChunkLoadingTasks
+            // Low view distance for starting in new place
 
             playerMovementTracker = new BlockPos[6];
-            playerMovementTrackerAvg = INVALID;
             playerMovementTrackerIndex = 0;
             lastPlayerMovementUpdate = 0;
             lastPlayerPos = null;
             playerMovementSpeed = 0;
+            direction = Vec3.ZERO;
+
+            if (predictionTask != null)
+            {
+                predictionTask.cancel();
+                predictionTask = null;
+            }
+
+            updatePlayerViewDistance(chunkPos, (ServerChunkCache) player.level().getChunkSource(), 4, chunkloadTicketType);
+
+            lastLevel = player.level().dimension();
+            lastChunk = null;
+            /* Dont think this is needed on tp
+            ((ServerChunkCache) player.level().getChunkSource()).distanceManager.playerTicketManager.runAllUpdates();
+            ((ServerChunkCache) player.level().getChunkSource()).distanceManager.ticketTracker.runDistanceUpdates(Integer.MAX_VALUE);
+            ((ServerChunkCache) player.level().getChunkSource()).distanceManager.runAllUpdates(((ServerChunkCache) player.level().getChunkSource()).chunkMap);
+            */
+            return;
         }
 
-        if (player.chunkPosition().equals(lastChunk))
+        if (chunkPos.equals(lastChunk))
         {
             if ((System.currentTimeMillis() - lastPlayerMovementUpdate) > 5 * 1000)
             {
                 trackPlayerMovement(player);
             }
 
-            if (isFrozen)
-            {
-                if (player.level()
-                  .hasChunk((int) (player.blockPosition().getX() + direction.normalize().multiply(32, 32, 32).x) >> 4,
-                    (int) (player.blockPosition().getZ() + direction.normalize().multiply(32, 32, 32).z) >> 4))
-                {
-                    isFrozen = false;
-                }
-            }
-
             return;
         }
 
         trackPlayerMovement(player);
-        lastChunk = player.chunkPosition();
+        lastChunk = chunkPos;
     }
 
     /**
@@ -155,29 +185,10 @@ public class PlayerChunkData
         {
             playerMovementTrackerIndex = (playerMovementTrackerIndex + 1) % playerMovementTracker.length;
             playerMovementTracker[playerMovementTrackerIndex] = player.blockPosition();
-
-            int x = 0;
-            int z = 0;
-            int count = 0;
-
-            for (int i = 0; i < playerMovementTracker.length; i++)
-            {
-                final BlockPos pos = playerMovementTracker[i];
-                if (pos != null)
-                {
-                    count++;
-                    x += pos.getX();
-                    z += pos.getZ();
-                }
-            }
-
-            final ChunkPos newPos = new ChunkPos((x / count) >> 4, (z / count) >> 4);
-
-            playerMovementTrackerAvg = newPos;
             checkDirection(player);
         }
 
-        chunkLoadForPlayer(player, playerMovementTrackerAvg);
+        doChunkLoadForPlayer(player, lastChunk);
     }
 
     /**
@@ -185,7 +196,7 @@ public class PlayerChunkData
      *
      * @return
      */
-    private Vec3 calculatePlayerMovementVec(final ServerPlayer player)
+    private Vec3 calculatePlayerMovementVec()
     {
         int xOld = 0;
         int zOld = 0;
@@ -233,61 +244,31 @@ public class PlayerChunkData
     /**
      * Does chunkloading around the player
      *
-     * @param player   player this is for
-     * @param newChunk chunk position to load around, avg of player movement
+     * @param player    player this is for
+     * @param lastChunk chunk position to load around, avg of player movement
      */
-    private void chunkLoadForPlayer(final ServerPlayer player, final ChunkPos newChunk)
+    private void doChunkLoadForPlayer(final ServerPlayer player, final ChunkPos lastChunk)
     {
         if (!config.getCommonConfig().enableSmartChunkLoading)
         {
             return;
         }
 
-        final int viewDistance = calculateViewDistance(player);
+        final int viewDistance = ((ServerChunkCache) player.level().getChunkSource()).chunkMap.viewDistance;
 
-        if (newChunk.equals(playerChunkLoadCenter))
+        if (player.chunkPosition().equals(lastChunk))
         {
             if (viewDistance == playerChunkLoadViewDistance)
             {
                 return;
             }
         }
-
-        playerChunkLoadCenter = newChunk;
-        setPlayerViewDistTo(playerChunkLoadCenter, ((ServerLevel) player.level()).getChunkSource(), viewDistance);
+        updatePlayerViewDistance(player.chunkPosition(), ((ServerLevel) player.level()).getChunkSource(), viewDistance, chunkloadTicketType);
     }
 
-    /**
-     * Calculates the view distance based on player movement
-     *
-     * @param player
-     * @return
-     */
-    private int calculateViewDistance(final ServerPlayer player)
-    {
-        final Vec3 playerMovement = calculatePlayerMovementVec(player).multiply(playerMovementSpeed / 4.3, 0, playerMovementSpeed / 4.3);
-        final ServerChunkCache chunkSource = ((ServerLevel) player.level()).getChunkSource();
-
-        // Normal movement: playermovement length: <=40, max creative flight speed length: 220
-        // <= 40: chunkSource.chunkMap.viewDistance
-        // (1.0 - (playermovement length - 40)/(80 * config.increaseformoreviewdistancewhilemoving)) * chunkSource.chunkMap.viewDistance
-        // 120+: minmum view dist of 4
-
-        int viewDistance = 4;
-        if (playerMovement.length() < 120 * config.getCommonConfig().smartChunkLoadModifier)
-        {
-            if (playerMovement.length() <= 40 * config.getCommonConfig().smartChunkLoadModifier)
-            {
-                viewDistance = chunkSource.chunkMap.viewDistance;
-            }
-            else
-            {
-                viewDistance = (int) ((1.0 - (playerMovement.length() - 40) / (80 * config.getCommonConfig().smartChunkLoadModifier)) * chunkSource.chunkMap.viewDistance);
-            }
-        }
-
-        return Math.max(5, viewDistance);
-    }
+    // TODO: For slower updating: Just compare distance of player to pos we're loading around and if its bigger than e.g. 3 chunks reset then players moving in small areas dont trigger anything,
+    //  could make it relative to viewdist and scale with movementspeed? slow movement = lazier updating.
+    //  May not be needed though, since the outer chunks load much slower.
 
     /**
      * Sets the player view distance area to the given position
@@ -295,37 +276,265 @@ public class PlayerChunkData
      * @param pos
      * @param chunkSource
      */
-    private void setPlayerViewDistTo(final ChunkPos pos, ServerChunkCache chunkSource, int viewDistance)
+    private void updatePlayerViewDistance(final ChunkPos pos, ServerChunkCache chunkSource, int viewDistance, TicketType ticketType)
     {
         if (!BetterChunkLoading.config.getCommonConfig().enableSmartChunkLoading)
         {
             return;
         }
-
-        if (playerChunkLoadLastPos != null)
-        {
-            chunkSource.removeRegionTicket(TICKET_PLAYER_CHUNK_AREA,
-              playerChunkLoadLastPos,
-              playerChunkLoadViewDistance,
-              playerChunkLoadLastPos);
-            playerChunkLoadLastPos = null;
-        }
-
         if (pos == null)
         {
+            if (viewDistLoadTask != null)
+            {
+                viewDistLoadTask.cancel();
+            }
+            viewDistLoadTask = null;
             return;
         }
 
         playerChunkLoadViewDistance = viewDistance;
-        playerChunkLoadLastPos = pos;
-        chunkSource.addRegionTicket(TICKET_PLAYER_CHUNK_AREA, pos, viewDistance, pos);
 
-        chunkSource.runDistanceManagerUpdates();
+        final ChunkPos predictionPos = new ChunkPos(pos.x + (int) (direction.normalize().multiply(3, 3, 3).x), pos.z + (int) (direction.normalize().multiply(3, 3, 3).z));
+
+        List<ChunkTicketPos> toLoad = new ArrayList<>();
+        for (int x = pos.x - viewDistance; x < pos.x + viewDistance; x++)
+        {
+            for (int z = pos.z - viewDistance; z < pos.z + viewDistance; z++)
+            {
+                var xDiff = pos.x - x;
+                var zDiff = pos.z - z;
+
+                var distance = Math.sqrt(xDiff * xDiff + zDiff * zDiff);
+
+                if (distance < viewDistance)
+                {
+                    var ticketPos = new ChunkTicketPos(new ChunkPos(x, z), ticketType, 2);
+
+                    xDiff = predictionPos.x - x;
+                    zDiff = predictionPos.z - z;
+
+                    ticketPos.distanceToPlayer = Math.sqrt(xDiff * xDiff + zDiff * zDiff);
+                    ticketPos.ticking = true;
+                    toLoad.add(ticketPos);
+                }
+            }
+        }
+
+        toLoad.sort(Comparator.comparingDouble(ChunkTicketPos::getDistanceToPlayer));
+
+        ChunkLoadingTask newTask = new ChunkLoadingTask(pos, chunkSource, new ArrayDeque<>(toLoad));
+        EventHandler.addTickingTask(chunkSource.getLevel().dimension(), newTask);
+        if (viewDistLoadTask != null)
+        {
+            newTask.syncWithLastTask(viewDistLoadTask);
+            // Delay cancel to after sync, so the chunk level does not change if not needed
+            viewDistLoadTask.cancel();
+        }
+
+        newTask.loadSpeedModifier = 7 * config.getCommonConfig().smartChunkLoadingSpeed;
+        viewDistLoadTask = newTask;
+        checkExisting();
 
         if (BetterChunkLoading.config.getCommonConfig().debugLogging)
         {
-            BetterChunkLoading.LOGGER.info("Set player chunkloading chunk position to: " + pos + " size:" + viewDistance);
+            BetterChunkLoading.LOGGER.info("Set player chunkloading chunk position to: " + pos + " viewdist:" + viewDistance);
         }
+    }
+
+    /**
+     * Prefer small gradual ticking updates with low ticket levels, similar to vanilla player chunkloading
+     */
+    private class ChunkLoadingTask implements ITickingTask
+    {
+        private final ChunkPos                      center;
+        private       ServerChunkCache              chunkSource;
+        private       Queue<ChunkTicketPos>         chunksToTicket;
+        private       Map<ChunkPos, ChunkTicketPos> loadedChunks      = new HashMap<>();
+        private       double                        loadSpeedModifier = 1.0;
+        private       double                        cooldownCounter   = 0;
+
+        private ChunkLoadingTask(final ChunkPos center, final ServerChunkCache chunkSource, final Queue<ChunkTicketPos> chunksToTicket)
+        {
+            this.center = center;
+            this.chunkSource = chunkSource;
+            this.chunksToTicket = chunksToTicket;
+        }
+
+        @Override
+        public boolean tick()
+        {
+            if (chunksToTicket == null || chunksToTicket.isEmpty())
+            {
+                return true;
+            }
+
+            if (cooldownCounter > 1)
+            {
+                cooldownCounter--;
+                return false;
+            }
+
+
+            // 100 MSTP -> 10 TPS -> 0.5
+            // 40 MSTP -> 20 TPS -> 4
+            // range: 60
+            int clampedMSTP = Math.min(100, Math.max(EventHandler.MSTP, 40));
+            double tpsMod = 1.0;
+            if (clampedMSTP <= 40)
+            {
+                tpsMod = 4;
+            }
+            else if (clampedMSTP <= 60)
+            {
+                // 4 - 1
+                tpsMod = (((clampedMSTP - 40) / 20.0) * -3.0) + 4;
+            }
+            else
+            {
+                // 1 - 0.2
+                tpsMod = (((clampedMSTP - 60) / 40.0) * -0.8) + 1;
+            }
+
+            cooldownCounter += (loadedChunks.size() / (100 * loadSpeedModifier * tpsMod));
+            while (!chunksToTicket.isEmpty())
+            {
+                // Note: If prediction chunks are lower ticket level, this will slow down the area a lot since we are re-ticketing the lower chunks to load to entity
+                final ChunkTicketPos ticketToAdd = chunksToTicket.poll();
+                SortedArraySet<Ticket<?>> ticketsAtPos = chunkSource.distanceManager.tickets.get(ticketToAdd.pos.toLong());
+                Ticket<?> firstTicket = ticketsAtPos != null ? ticketsAtPos.first() : null;
+                if (firstTicket != null && firstTicket.getTicketLevel() <= (ChunkLevel.byStatus(FullChunkStatus.FULL)) - 1)
+                {
+                    addTicketfor(ticketToAdd);
+                    continue;
+                }
+
+                addTicketfor(ticketToAdd);
+                break;
+            }
+
+            return chunksToTicket.isEmpty();
+        }
+
+        @Override
+        public void cancel()
+        {
+            for (final ChunkTicketPos pos : loadedChunks.values())
+            {
+                removeTicketfor(pos);
+            }
+
+            chunksToTicket = null;
+            loadedChunks = null;
+            chunkSource = null;
+        }
+
+        /**
+         * Re-adds tickets before they get removed for matching positions
+         *
+         * @param oldTask
+         */
+        private void syncWithLastTask(final ChunkLoadingTask oldTask)
+        {
+            for (Iterator<ChunkTicketPos> iterator = chunksToTicket.iterator(); iterator.hasNext(); )
+            {
+                final ChunkTicketPos ticketToAdd = iterator.next();
+
+                final ChunkTicketPos oldPos = oldTask.loadedChunks.get(ticketToAdd.pos);
+                if (ticketToAdd.equals(oldPos) && chunkSource == oldTask.chunkSource)
+                {
+                    SortedArraySet<Ticket<?>> ticketsAtPos = chunkSource.distanceManager.tickets.get(ticketToAdd.pos.toLong());
+
+                    boolean refreshedTicket = false;
+                    if (ticketsAtPos != null && !ticketsAtPos.isEmpty())
+                    {
+                        for (final Ticket ticket : ticketsAtPos)
+                        {
+                            if (ticket.getType() == ticketToAdd.type && ticket.getTicketLevel() == getTicketLevelForArea(ticketToAdd.ticketArea))
+                            {
+                                ticket.setCreatedTick(chunkSource.distanceManager.ticketTickCounter);
+                                loadedChunks.put(oldPos.pos, ticketToAdd);
+
+                                refreshedTicket = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    oldTask.loadedChunks.remove(oldPos.pos);
+
+                    if (refreshedTicket)
+                    {
+                        iterator.remove();
+                    }
+                }
+            }
+        }
+
+        private void addTicketfor(final ChunkTicketPos ticketPos)
+        {
+            chunkSource.distanceManager.addTicket(ticketPos.type, ticketPos.pos, getTicketLevelForArea(ticketPos.ticketArea), ticketPos.pos);
+            if (BetterChunkLoading.IN_DEV)
+            {
+                chunkToTicketMap.computeIfAbsent(ticketPos.pos.toLong(), t -> new HashSet<>()).add(ticketPos);
+            }
+
+            final ChunkTicketPos prev = loadedChunks.put(ticketPos.pos, ticketPos);
+            if (prev != null && BetterChunkLoading.IN_DEV)
+            {
+                LOGGER.warn("Error, re-adding ticket twice!");
+            }
+        }
+
+        private void removeTicketfor(final ChunkTicketPos ticketPos)
+        {
+            final SortedArraySet<Ticket<?>> ticketsAtPos = chunkSource.distanceManager.tickets.get(ticketPos.pos.toLong());
+            if (ticketsAtPos != null && !ticketsAtPos.isEmpty())
+            {
+                if (chunkSource.getVisibleChunkIfPresent(ticketPos.pos.toLong()).getFullChunk() == null)
+                {
+                    chunkSource.distanceManager.removeTicket(ticketPos.type, ticketPos.pos, getTicketLevelForArea(ticketPos.ticketArea), ticketPos.pos);
+                    if (BetterChunkLoading.IN_DEV)
+                    {
+                        chunkToTicketMap.computeIfAbsent(ticketPos.pos.toLong(), t -> new HashSet<>()).remove(ticketPos);
+                        chunkToTicketRmovedMap.computeIfAbsent(ticketPos.pos.toLong(), t -> new HashSet<>()).add(ticketPos);
+                    }
+
+                    return;
+                }
+
+                int counter = 0;
+                for (final Ticket ticket : ticketsAtPos)
+                {
+                    counter++;
+                    if (ticket.getType() == ticketPos.type && ticket.getTicketLevel() == getTicketLevelForArea(ticketPos.ticketArea))
+                    {
+                        if (BetterChunkLoading.IN_DEV)
+                        {
+                            chunkToTicketUnloadMap.computeIfAbsent(ticketPos.pos.toLong(), t -> new HashSet<>()).add(ticketPos);
+                        }
+                        // Use the timer to unload one each tick, with a bit of delay giving the player a chance to refresh them.
+                        ticket.setCreatedTick(chunkSource.distanceManager.ticketTickCounter - ticket.getType().timeout() + 30 + counter);
+                        return;
+                    }
+                }
+            }
+            else if (BetterChunkLoading.IN_DEV)
+            {
+                LOGGER.warn("Error ticket not found at position!");
+            }
+        }
+    }
+
+    /**
+     * Region Tickets do not need this, they already do it by default.
+     * We use nonregion tickets since they are not supposed to do simulation distance tickets
+     *
+     * @param ticketArea
+     * @return
+     */
+    private static int getTicketLevelForArea(final int ticketArea)
+    {
+        return ChunkLevel.byStatus(FullChunkStatus.FULL) - ticketArea;
     }
 
     /**
@@ -335,7 +544,11 @@ public class PlayerChunkData
      */
     public void onLogout(final ServerPlayer player)
     {
-        setPlayerViewDistTo(null, ((ServerLevel) player.level()).getChunkSource(), 0);
+        updatePlayerViewDistance(null, ((ServerLevel) player.level()).getChunkSource(), 0, chunkloadTicketType);
+        if (predictionTask != null)
+        {
+            predictionTask.cancel();
+        }
     }
 
     /**
@@ -345,19 +558,12 @@ public class PlayerChunkData
      */
     private void checkDirection(final ServerPlayer player)
     {
-        direction = calculatePlayerMovementVec(player);
+        direction = calculatePlayerMovementVec();
         Vec3 currentpos = player.position();
 
         if (BetterChunkLoading.config.getCommonConfig().enablePrediction)
         {
             checkPrediction(direction, currentpos, player);
-        }
-
-        if (!player.level()
-          .hasChunk((int) (player.blockPosition().getX() + direction.normalize().multiply(32, 32, 32).x) >> 4,
-            (int) (player.blockPosition().getZ() + direction.normalize().multiply(32, 32, 32).z) >> 4))
-        {
-            isFrozen = true;
         }
     }
 
@@ -370,9 +576,8 @@ public class PlayerChunkData
      */
     private void checkPrediction(final Vec3 direction, final Vec3 currentPos, final ServerPlayer player)
     {
-        final int viewDist =
-          config.getCommonConfig().enableSmartChunkLoading ? playerChunkLoadViewDistance : ((ServerChunkCache) player.level().getChunkSource()).chunkMap.viewDistance;
-        Vec3 predictedPos = currentPos.add(direction.normalize().scale(16 * (viewDist * 0.7)));
+        Vec3 predictedPos = currentPos.add(direction.normalize()
+            .scale(16 * Math.max(3, ((ServerChunkCache) player.level().getChunkSource()).chunkMap.viewDistance - config.getCommonConfig().predictionarea * 2)));
 
         for (int i = 0; i < 30 && !player.level().hasChunk((int) predictedPos.x >> 4, (int) predictedPos.z >> 4); i++)
         {
@@ -383,45 +588,154 @@ public class PlayerChunkData
         {
             final ChunkPos nextPredictedStartChunk = new ChunkPos((int) predictedPos.x >> 4, (int) predictedPos.z >> 4);
             BetterChunkLoading.LOGGER.info(
-              "Set predictive loading position with area:" + Math.min(config.getCommonConfig().predictionarea, viewDist + 1) + " to chunk: " + nextPredictedStartChunk
-                + " player chunk:"
-                + player.chunkPosition());
+                "Set predictive loading position with area:" + config.getCommonConfig().predictionarea + " to chunk: " + nextPredictedStartChunk
+                    + " player chunk:"
+                    + player.chunkPosition());
         }
 
-        final Object2IntOpenHashMap<ChunkPos> oldTickets = lastTickets;
-        lastTickets = new Object2IntOpenHashMap<>();
+        final ChunkPos center = new ChunkPos(((int) predictedPos.x >> 4), ((int) predictedPos.z >> 4));
+        final ChunkPos predictionPos = new ChunkPos(player.chunkPosition().x + (int) (direction.normalize().multiply(3, 3, 3).x),
+            player.chunkPosition().z + (int) (direction.normalize().multiply(3, 3, 3).z));
+        final int areaRadius = config.getCommonConfig().predictionarea;
 
-        final int repetition = (int) (Math.abs(direction.x) + Math.abs(direction.z)) / 16;
-        for (int i = 0; i < repetition; i++)
+        List<ChunkTicketPos> toLoad = new ArrayList<>();
+        for (int x = center.x - areaRadius; x < center.x + areaRadius; x++)
         {
-            addpredictionChunkTicket(new ChunkPos(((int) predictedPos.x >> 4), ((int) predictedPos.z >> 4)),
-              Math.min(config.getCommonConfig().predictionarea, viewDist + 1),
-              ((ServerLevel) player.level()).getChunkSource());
+            for (int z = center.z - areaRadius; z < center.z + areaRadius; z++)
+            {
+                var xDiff = center.x - x;
+                var zDiff = center.z - z;
 
-            predictedPos = predictedPos.add(direction.normalize().scale(16));
+                var distance = Math.sqrt(xDiff * xDiff + zDiff * zDiff);
+                if (distance < areaRadius)
+                {
+                    var ticketPos = new ChunkTicketPos(new ChunkPos(x, z), predictionTicketType, 1);
+
+                    // Skip places already loaded by the view distance
+                    if (viewDistLoadTask != null)
+                    {
+                        final ChunkTicketPos chunkTicketPos = viewDistLoadTask.loadedChunks.get(ticketPos.pos);
+                        if (ticketPos.equals(chunkTicketPos))
+                        {
+                            continue;
+                        }
+                    }
+
+                    xDiff = predictionPos.x - x;
+                    zDiff = predictionPos.z - z;
+
+                    ticketPos.distanceToPlayer = Math.sqrt(xDiff * xDiff + zDiff * zDiff);
+                    toLoad.add(ticketPos);
+                }
+            }
         }
 
-        for (final Object2IntMap.Entry<ChunkPos> ticketEntry : oldTickets.object2IntEntrySet())
+        toLoad.sort(Comparator.comparingDouble(ChunkTicketPos::getDistanceToPlayer));
+        ChunkLoadingTask newTask = new ChunkLoadingTask(center, ((ServerLevel) player.level()).getChunkSource(), new ArrayDeque<>(toLoad));
+        EventHandler.addTickingTask(player.level().dimension(), newTask);
+
+        if (predictionTask != null)
         {
-            ((ServerChunkCache) player.level().getChunkSource()).removeRegionTicket(TICKET_PREDICTION, ticketEntry.getKey(), ticketEntry.getIntValue(), ticketEntry.getKey());
+            newTask.syncWithLastTask(predictionTask);
+
+            // Delay cancel to after sync, so the chunk level does not change if not needed
+            predictionTask.cancel();
+        }
+        predictionTask = newTask;
+        checkExisting();
+        predictionTask.loadSpeedModifier = 10 * config.getCommonConfig().predictionLoadingSpeed;
+
+        predictionTask.tick();
+    }
+
+    private static class ChunkTicketPos
+    {
+        private       double               distanceToPlayer = 100;
+        private final ChunkPos             pos;
+        private final TicketType<ChunkPos> type;
+        private final int                  ticketArea;
+        private       boolean              ticking          = false;
+
+        ChunkTicketPos(ChunkPos pos, TicketType<ChunkPos> type, int ticketLevel)
+        {
+            this.pos = pos;
+            this.type = type;
+            this.ticketArea = ticketLevel;
         }
 
-        ((ServerChunkCache) player.level().getChunkSource()).runDistanceManagerUpdates();
+        public double getDistanceToPlayer()
+        {
+            return distanceToPlayer;
+        }
+
+        public boolean equals(Object obj)
+        {
+            if (this == obj)
+            {
+                return true;
+            }
+
+            if (obj instanceof ChunkTicketPos ticketPos)
+            {
+                return ticketPos.ticketArea == ticketArea && ticketPos.pos.equals(pos) && ticketPos.type.equals(type) && ticketPos.ticking == ticking;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        @Override
+        public int hashCode()
+        {
+            return Objects.hash(pos, type, ticketArea, ticking);
+        }
     }
 
     /**
-     * Adds a chunk ticket
-     *
-     * @param pos
-     * @param level
-     * @param chunkSource
+     * Debug tracking, to make sure no tickets are lost
      */
-    private void addpredictionChunkTicket(final ChunkPos pos, final int level, ServerChunkCache chunkSource)
+    private static Long2ObjectOpenHashMap<Set<ChunkTicketPos>> chunkToTicketMap       = new Long2ObjectOpenHashMap();
+    private static Long2ObjectOpenHashMap<Set<ChunkTicketPos>> chunkToTicketUnloadMap = new Long2ObjectOpenHashMap();
+    private static Long2ObjectOpenHashMap<Set<ChunkTicketPos>> chunkToTicketRmovedMap = new Long2ObjectOpenHashMap();
+
+    private void checkExisting()
     {
-        chunkSource.addRegionTicket(TICKET_PREDICTION,
-          pos,
-          level,
-          pos);
-        lastTickets.put(pos, level);
+        if (!BetterChunkLoading.IN_DEV)
+        {
+            return;
+        }
+
+        if (predictionTask != null)
+        {
+            for (final var entry : chunkToTicketMap.long2ObjectEntrySet())
+            {
+                for (final ChunkTicketPos chunkTicketPos : entry.getValue())
+                {
+                    if (!predictionTask.loadedChunks.containsKey(chunkTicketPos.pos) && (viewDistLoadTask == null || !viewDistLoadTask.loadedChunks.containsKey(chunkTicketPos.pos))
+                        && !chunkToTicketUnloadMap.getOrDefault(chunkTicketPos.pos.toLong(), new HashSet<>()).contains(chunkTicketPos))
+                    {
+                        LOGGER.warn("Lost ticket1!!!");
+                    }
+                }
+            }
+        }
+
+        if (viewDistLoadTask != null)
+        {
+            for (final var entry : chunkToTicketMap.long2ObjectEntrySet())
+            {
+                for (final ChunkTicketPos chunkTicketPos : entry.getValue())
+                {
+                    if ((predictionTask == null || !predictionTask.loadedChunks.containsKey(chunkTicketPos.pos)) && (viewDistLoadTask == null
+                        || !viewDistLoadTask.loadedChunks.containsKey(chunkTicketPos.pos))
+                        && !chunkToTicketUnloadMap.getOrDefault(chunkTicketPos.pos.toLong(), new HashSet<>()).contains(chunkTicketPos))
+                    {
+                        LOGGER.warn("Lost ticket2!!!");
+                    }
+                }
+            }
+        }
     }
+
 }

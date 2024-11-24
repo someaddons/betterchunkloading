@@ -102,12 +102,7 @@ public class Command
                 .executes(context ->
                 {
                     ChunkPos chunkPos = new ChunkPos(BlockPosArgument.getBlockPos(context, "position"));
-                    //Loads 9 chunks, full status:
-                    context.getSource().getLevel().getChunkSource().distanceManager.addRegionTicket(TicketType.UNKNOWN,
-                      chunkPos,
-                      1,
-                      chunkPos);
-
+                    context.getSource().getLevel().getChunk(chunkPos.x, chunkPos.z);
                     return 1;
                 })))
           .then(

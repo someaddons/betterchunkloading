@@ -7,7 +7,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 
 @Mixin(ChunkMap.class)
-public class ChunkMapViewDistanceFixedTwo
+public abstract class ChunkMapViewDistanceFixedTwo
 {
     /**
      * View distance handled by vanilla is 4, we handle further tickets ourselves
@@ -20,7 +20,7 @@ public class ChunkMapViewDistanceFixedTwo
     {
         if (BetterChunkLoading.config.getCommonConfig().enableSmartChunkLoading)
         {
-            return 5;
+            return 3;
         }
         else
         {

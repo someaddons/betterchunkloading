@@ -5,14 +5,16 @@
   "refmap": "betterchunkloading.refmap.json",
   "mixinPriority": 200,
   "mixins": [
-    "LevelChunkPostProcessMixin",
     "ChunkMapViewDistanceFixed",
     "ChunkMapViewDistanceFixedTwo",
-    "PlayerChunkDataMixin",
-    "RegionFileStorageMixin",
-    "PlayerMovementNoUnloaded",
+    "ChunkTaskPriorityQueueMixin",
+    "ChunkTaskPriorityQueueSorterMixin",
+    "LevelChunkPostProcessMixin",
     "PathRecomputeChunkLoadPrevention",
-    "ChunkTaskPriorityQueueSorterMixin"
+    "PlayerChunkDataMixin",
+    "PlayerMovementNoUnloaded",
+    "RegionFileStorageMixin",
+    "ServerChunkCacheMixin"
   ],
   "client": [
     "OptionsDevMixin"

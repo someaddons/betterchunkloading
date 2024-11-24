@@ -32,9 +32,6 @@ public class BetterChunkLoading
     public static       Random                              rand   = new Random();
 
     public static final TicketType<ChunkPos> TICKET_POST_PROCESS      = TicketType.create("betterchunkloadingpostprocess", Comparator.comparingLong(ChunkPos::toLong), 20 * 60 * 5);
-    public static final TicketType<ChunkPos> TICKET_PREDICTION        = TicketType.create("betterchunkloadingprediction", Comparator.comparingLong(ChunkPos::toLong), 20 * 60 * 1);
-    public static final TicketType<ChunkPos> TICKET_PLAYER_CHUNK_AREA =
-      TicketType.create("betterchunkloadingplayerchunk", Comparator.comparingLong(ChunkPos::toLong), 20 * 60 * 20);
 
     public static boolean IN_DEV = !FMLEnvironment.production;
 

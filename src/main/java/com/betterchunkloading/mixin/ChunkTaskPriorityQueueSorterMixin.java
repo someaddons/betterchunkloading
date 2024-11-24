@@ -5,9 +5,6 @@ import net.minecraft.server.level.ChunkTaskPriorityQueue;
 import net.minecraft.server.level.ChunkTaskPriorityQueueSorter;
 import net.minecraft.util.Unit;
 import net.minecraft.util.thread.ProcessorHandle;
-import net.minecraft.util.thread.ProcessorMailbox;
-import net.minecraft.util.thread.StrictQueue;
-import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -34,11 +31,12 @@ public abstract class ChunkTaskPriorityQueueSorterMixin
 
     @Inject(method = "pollTask", at = @At("RETURN"))
     private <T> void polltaskAdditionally(
-      final ChunkTaskPriorityQueue<Function<ProcessorHandle<Unit>, T>> functionChunkTaskPriorityQueue,
-      final ProcessorHandle<T> processorHandle,
-      final CallbackInfo ci)
+        final ChunkTaskPriorityQueue<Function<ProcessorHandle<Unit>, T>> functionChunkTaskPriorityQueue,
+        final ProcessorHandle<T> processorHandle,
+        final CallbackInfo ci)
     {
-        if (functionChunkTaskPriorityQueue.hasWork() && adjusting == 0 && BetterChunkLoading.config.getCommonConfig().enableFasterChunkTasks && this.hasWork() && functionChunkTaskPriorityQueue.toString().contains("worldgen"))
+        if (functionChunkTaskPriorityQueue.hasWork() && adjusting == 0 && BetterChunkLoading.config.getCommonConfig().enableFasterChunkTasks && this.hasWork()
+            && functionChunkTaskPriorityQueue.toString().contains("worldgen"))
         {
             adjusting++;
             pollTask(functionChunkTaskPriorityQueue, processorHandle);

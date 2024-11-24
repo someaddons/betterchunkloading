@@ -4,8 +4,10 @@ import com.betterchunkloading.BetterChunkLoading;
 import com.betterchunkloading.chunk.IPlayerDataPlayer;
 import it.unimi.dsi.fastutil.shorts.ShortList;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.*;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
@@ -159,7 +161,13 @@ public class EventHandler
                     if (!(blockstate.getBlock() instanceof LiquidBlock))
                     {
                         BlockState blockstate1 = Block.updateFromNeighbourShapes(blockstate, chunkInfo.level, blockpos);
-                        chunkInfo.level.setBlock(blockpos, blockstate1, 3);
+                        chunkInfo.level.setBlock(blockpos, blockstate1, 20);
+
+                        final ClientboundBlockUpdatePacket packet = new ClientboundBlockUpdatePacket(blockpos, chunk.getBlockState(blockpos));
+                        for(final ServerPlayer player: ((ServerChunkCache)chunkInfo.level.getChunkSource()).chunkMap.getPlayers(chunkInfo.pos, false))
+                        {
+                            player.connection.send(packet);
+                        }
                     }
                 }
             }

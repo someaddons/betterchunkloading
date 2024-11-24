@@ -31,12 +31,12 @@ public abstract class ChunkTaskPriorityQueueSorterMixin
 
     @Inject(method = "pollTask", at = @At("RETURN"))
     private <T> void polltaskAdditionally(
-      final ChunkTaskPriorityQueue<Function<ProcessorHandle<Unit>, T>> functionChunkTaskPriorityQueue,
-      final ProcessorHandle<T> processorHandle,
-      final CallbackInfo ci)
+        final ChunkTaskPriorityQueue<Function<ProcessorHandle<Unit>, T>> functionChunkTaskPriorityQueue,
+        final ProcessorHandle<T> processorHandle,
+        final CallbackInfo ci)
     {
         if (functionChunkTaskPriorityQueue.hasWork() && adjusting == 0 && BetterChunkLoading.config.getCommonConfig().enableFasterChunkTasks && this.hasWork()
-              && functionChunkTaskPriorityQueue.toString().contains("worldgen"))
+            && functionChunkTaskPriorityQueue.toString().contains("worldgen"))
         {
             adjusting++;
             pollTask(functionChunkTaskPriorityQueue, processorHandle);

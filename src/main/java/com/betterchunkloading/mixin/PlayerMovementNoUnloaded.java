@@ -2,12 +2,9 @@ package com.betterchunkloading.mixin;
 
 import com.betterchunkloading.BetterChunkLoading;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
-import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.util.Mth;
-import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.chunk.status.ChunkStatus;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -43,17 +40,21 @@ public abstract class PlayerMovementNoUnloaded
         double clampedPacketX = clampHorizontal(packet.getX(this.player.getX()));
         double clampedPacketZ = clampHorizontal(packet.getZ(this.player.getZ()));
 
-        double xDiff = (clampedPacketX - this.firstGoodX) * 4;
-        double zDiff = (clampedPacketZ - this.firstGoodZ) * 4;
+        double xDiff = Math.max(-16, Math.min(16, (clampedPacketX - this.firstGoodX) * 4));
+        double zDiff = Math.max(-16, Math.min(16, (clampedPacketZ - this.firstGoodZ) * 4));
 
         final int projectedChunkX = Mth.floor(player.getX() + xDiff) >> 4;
         final int projectedChunkZ = Mth.floor(player.getZ() + zDiff) >> 4;
 
         if (projectedChunkX != player.chunkPosition().x || projectedChunkZ != player.chunkPosition().z)
         {
-            var holder = ((ServerChunkCache) player.level().getChunkSource()).getVisibleChunkIfPresent(ChunkPos.asLong(projectedChunkX, projectedChunkZ));
-            if (holder == null || holder.getChunkIfPresent(ChunkStatus.FULL) == null)
+            if (!player.level().hasChunk(projectedChunkX, projectedChunkZ))
             {
+                if (BetterChunkLoading.config.getCommonConfig().debugLogging)
+                {
+                    BetterChunkLoading.LOGGER.warn(
+                        "Preventing player movement into unloaded chunk for:" + player + "! xDiff:" + xDiff + " zdiff:" + zDiff);
+                }
                 ci.cancel();
             }
         }

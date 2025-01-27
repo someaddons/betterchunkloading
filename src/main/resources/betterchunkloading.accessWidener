@@ -17,3 +17,4 @@ accessible method net/minecraft/server/level/ChunkHolder updateChunkToSave (Ljav
 accessible method net/minecraft/server/level/ChunkMap getVisibleChunkIfPresent (J)Lnet/minecraft/server/level/ChunkHolder;
 accessible field net/minecraft/server/level/DistanceManager ticketTickCounter J
 accessible method net/minecraft/server/level/Ticket setCreatedTick (J)V
+accessible method net/minecraft/server/MinecraftServer haveTime ()Z

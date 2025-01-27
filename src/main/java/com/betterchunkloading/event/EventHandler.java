@@ -2,6 +2,7 @@ package com.betterchunkloading.event;
 
 import com.betterchunkloading.BetterChunkLoading;
 import com.betterchunkloading.chunk.IPlayerDataPlayer;
+import com.betterchunkloading.config.CommonConfiguration;
 import it.unimi.dsi.fastutil.shorts.ShortList;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket;
@@ -9,6 +10,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.*;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.LiquidBlock;
@@ -68,6 +70,8 @@ public class EventHandler
             tickTimer++;
             if (tickTimer >= 40)
             {
+                CommonConfiguration.convertWaterSource = event.getServer().getGameRules().getBoolean(GameRules.RULE_WATER_SOURCE_CONVERSION);
+                CommonConfiguration.convertLavaSource = event.getServer().getGameRules().getBoolean(GameRules.RULE_LAVA_SOURCE_CONVERSION);
                 tickTimer = 0;
                  MSTP = (int) (average(event.getServer().tickTimes) * 1.0E-6D);
             }
@@ -105,7 +109,7 @@ public class EventHandler
                     iterator.remove();
 
                     amount++;
-                    if (amount > 10)
+                    if (amount > 10 || !chunkInfo.level.getServer().haveTime())
                     {
                         return;
                     }

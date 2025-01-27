@@ -8,6 +8,7 @@
     "ChunkMapViewDistanceFixedTwo",
     "ChunkTaskPriorityQueueMixin",
     "ChunkTaskPriorityQueueSorterMixin",
+    "LavaFluidMixin",
     "LevelChunkPostProcessMixin",
     "PathRecomputeChunkLoadPrevention",
     "PersistentEntityDebugMixin",
@@ -16,7 +17,8 @@
     "PlayerMovementNoUnloaded",
     "PlayerTickEvent",
     "RegionFileStorageMixin",
-    "ServerChunkCacheMixin"
+    "ServerChunkCacheMixin",
+    "WaterFluidMixin"
   ],
   "client": [
     "OptionsDevMixin"

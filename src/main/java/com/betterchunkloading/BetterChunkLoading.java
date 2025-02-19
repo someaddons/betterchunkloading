@@ -7,6 +7,7 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.server.level.TicketType;
@@ -37,6 +38,7 @@ public class BetterChunkLoading implements ModInitializer
         CommandRegistrationCallback.EVENT.register((c, o, b) -> c.register(new Command().build()));
         ServerChunkEvents.CHUNK_LOAD.register(EventHandler::onChunkLoad);
         ServerChunkEvents.CHUNK_UNLOAD.register(EventHandler::onChunkUnLoad);
+        ServerLifecycleEvents.SERVER_STARTED.register(EventHandler::onServerStart);
     }
 
     @Override

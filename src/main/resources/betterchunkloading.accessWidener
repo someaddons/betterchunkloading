@@ -18,3 +18,4 @@ accessible method net/minecraft/server/level/ChunkMap getVisibleChunkIfPresent (
 accessible field net/minecraft/server/level/DistanceManager ticketTickCounter J
 accessible method net/minecraft/server/level/Ticket setCreatedTick (J)V
 accessible method net/minecraft/server/MinecraftServer haveTime ()Z
+accessible field net/minecraft/server/level/Ticket createdTick J

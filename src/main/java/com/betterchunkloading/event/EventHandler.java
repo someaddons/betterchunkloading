@@ -2,6 +2,7 @@ package com.betterchunkloading.event;
 
 import com.betterchunkloading.BetterChunkLoading;
 import com.betterchunkloading.chunk.IPlayerDataPlayer;
+import com.betterchunkloading.chunk.PlayerChunkData;
 import com.betterchunkloading.config.CommonConfiguration;
 import it.unimi.dsi.fastutil.shorts.ShortList;
 import net.minecraft.core.BlockPos;
@@ -20,6 +21,7 @@ import net.minecraft.world.level.material.FluidState;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.level.ChunkEvent;
+import net.neoforged.neoforge.event.server.ServerStartingEvent;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
@@ -55,9 +57,13 @@ public class EventHandler
         }
         else
         {
-            if (BetterChunkLoading.IN_DEV && EventHandler.delayedLoadingMap.containsKey(info.pos))
+            if (EventHandler.delayedLoadingMap.containsKey(info.pos))
             {
-                BetterChunkLoading.LOGGER.error("processing chunk twice!", new Exception());
+                if (BetterChunkLoading.IN_DEV)
+                {
+                    BetterChunkLoading.LOGGER.error("processing chunk twice!", new Exception());
+                }
+                return;
             }
             toadd.add(info);
         }
@@ -93,15 +99,15 @@ public class EventHandler
         {
             final ChunkInfo chunkInfo = iterator.next();
             if (serverTime - chunkInfo.originalTime > 20
-                  && chunkInfo.level.hasChunk(chunkInfo.pos.x, chunkInfo.pos.z)
-                  && chunkInfo.level.hasChunk(chunkInfo.pos.x + 1, chunkInfo.pos.z + 1)
-                  && chunkInfo.level.hasChunk(chunkInfo.pos.x + 1, chunkInfo.pos.z)
-                  && chunkInfo.level.hasChunk(chunkInfo.pos.x + 1, chunkInfo.pos.z - 1)
-                  && chunkInfo.level.hasChunk(chunkInfo.pos.x, chunkInfo.pos.z + 1)
-                  && chunkInfo.level.hasChunk(chunkInfo.pos.x, chunkInfo.pos.z - 1)
-                  && chunkInfo.level.hasChunk(chunkInfo.pos.x - 1, chunkInfo.pos.z + 1)
-                  && chunkInfo.level.hasChunk(chunkInfo.pos.x - 1, chunkInfo.pos.z)
-                  && chunkInfo.level.hasChunk(chunkInfo.pos.x - 1, chunkInfo.pos.z - 1))
+                && chunkInfo.level.hasChunk(chunkInfo.pos.x, chunkInfo.pos.z)
+                && chunkInfo.level.hasChunk(chunkInfo.pos.x + 1, chunkInfo.pos.z + 1)
+                && chunkInfo.level.hasChunk(chunkInfo.pos.x + 1, chunkInfo.pos.z)
+                && chunkInfo.level.hasChunk(chunkInfo.pos.x + 1, chunkInfo.pos.z - 1)
+                && chunkInfo.level.hasChunk(chunkInfo.pos.x, chunkInfo.pos.z + 1)
+                && chunkInfo.level.hasChunk(chunkInfo.pos.x, chunkInfo.pos.z - 1)
+                && chunkInfo.level.hasChunk(chunkInfo.pos.x - 1, chunkInfo.pos.z + 1)
+                && chunkInfo.level.hasChunk(chunkInfo.pos.x - 1, chunkInfo.pos.z)
+                && chunkInfo.level.hasChunk(chunkInfo.pos.x - 1, chunkInfo.pos.z - 1))
             {
                 applyToChunk(chunkInfo);
                 delayedLoadingMap.remove(chunkInfo.pos);
@@ -113,7 +119,16 @@ public class EventHandler
                     return;
                 }
             }
-            else if (serverTime - chunkInfo.originalTime > 20 * 60)
+            else if (serverTime - chunkInfo.originalTime > 20 * 60 && !chunkInfo.addedTicket)
+            {
+                chunkInfo.addedTicket = true;
+                chunkInfo.originalTime = serverTime - 20 * 60;
+                ((ServerLevel) chunkInfo.level).getChunkSource().distanceManager.addTicket(TICKET_POST_PROCESS,
+                    chunkInfo.pos,
+                    PlayerChunkData.getTicketLevelForArea(2),
+                    chunkInfo.pos);
+            }
+            else if (serverTime - chunkInfo.originalTime > 20 * 90)
             {
                 if (BetterChunkLoading.IN_DEV && ((ServerLevel) chunkInfo.level).getChunkSource().distanceManager.tickets.get(chunkInfo.pos.toLong()) == null)
                 {
@@ -123,7 +138,7 @@ public class EventHandler
                     if (((ServerLevel) chunkInfo.level).getChunkSource().distanceManager.tickets.get(chunkInfo.pos.toLong()) == null)
                     {
                         BetterChunkLoading.LOGGER.warn(
-                          "Really! Missing ticket!!! time since ticket:" + (chunkInfo.level.getServer().getTickCount() - chunkInfo.originalTime));
+                            "Really! Missing ticket!!! time since ticket:" + (chunkInfo.level.getServer().getTickCount() - chunkInfo.originalTime));
                     }
                 }
 
@@ -167,7 +182,7 @@ public class EventHandler
                         chunkInfo.level.setBlock(blockpos, blockstate1, 20);
 
                         final ClientboundBlockUpdatePacket packet = new ClientboundBlockUpdatePacket(blockpos, chunk.getBlockState(blockpos));
-                        for(final ServerPlayer player: ((ServerChunkCache)chunkInfo.level.getChunkSource()).chunkMap.getPlayers(chunkInfo.pos, false))
+                        for (final ServerPlayer player : ((ServerChunkCache) chunkInfo.level.getChunkSource()).chunkMap.getPlayers(chunkInfo.pos, false))
                         {
                             player.connection.send(packet);
                         }
@@ -177,9 +192,16 @@ public class EventHandler
         }
 
         ((ServerChunkCache) chunkInfo.level.getChunkSource()).distanceManager.removeTicket(TICKET_POST_PROCESS,
-          chunkInfo.pos,
-          ChunkLevel.byStatus(FullChunkStatus.FULL) - 1,
-          chunkInfo.pos);
+            chunkInfo.pos,
+            ChunkLevel.byStatus(FullChunkStatus.FULL) - 1,
+            chunkInfo.pos);
+    }
+
+    @SubscribeEvent
+    public static void onServerStart(final ServerStartingEvent event)
+    {
+        CommonConfiguration.convertWaterSource = event.getServer().getGameRules().getBoolean(GameRules.RULE_WATER_SOURCE_CONVERSION);
+        CommonConfiguration.convertLavaSource = event.getServer().getGameRules().getBoolean(GameRules.RULE_LAVA_SOURCE_CONVERSION);
     }
 
     /**
@@ -187,10 +209,11 @@ public class EventHandler
      */
     public static class ChunkInfo
     {
-        private final long        originalTime;
+        private long    originalTime;
         private final ChunkPos    pos;
         private final Level       level;
         private final ShortList[] data;
+        public  boolean addedTicket = false;
 
         public ChunkInfo(final long originalTime, final ChunkPos pos, final Level level, ShortList[] data)
         {
@@ -225,13 +248,13 @@ public class EventHandler
     @SubscribeEvent
     public static void onPlayerTick(PlayerTickEvent.Post event)
     {
-            if (event.getEntity().tickCount % 3 == 0)
+        if (event.getEntity().tickCount % 3 == 0)
+        {
+            if (event.getEntity() instanceof IPlayerDataPlayer dataPlayer && event.getEntity().getClass() == ServerPlayer.class)
             {
-                if (event.getEntity() instanceof IPlayerDataPlayer dataPlayer && event.getEntity().getClass() == ServerPlayer.class)
-                {
-                    dataPlayer.betterchunkloading$getPlayerChunkData().onChunkChanged((ServerPlayer) event.getEntity(), null);
-                }
+                dataPlayer.betterchunkloading$getPlayerChunkData().onChunkChanged((ServerPlayer) event.getEntity(), null);
             }
+        }
 
         if (!BetterChunkLoading.IN_DEV)
         {
@@ -240,8 +263,7 @@ public class EventHandler
 
         if (event.getEntity().level().getGameTime() % (20 * 10) == 0)
         {
-            BetterChunkLoading.LOGGER.warn(
-                "Loaded chunks: " + loadedChunks + " unloaded: " + unloadedChunks + " total:" + event.getEntity().level().getChunkSource().getLoadedChunksCount());
+            BetterChunkLoading.LOGGER.warn("Loaded chunks: " + loadedChunks + " unloaded: " + unloadedChunks + " total:" + loadedChunksMap.size());
             loadedChunks = 0;
             unloadedChunks = 0;
         }
@@ -268,8 +290,9 @@ public class EventHandler
      * Debugging Utils
      */
 
-    static Map<ChunkPos, Integer> recentlyLoadedTimes   = new HashMap<>();
-    static Map<ChunkPos, Integer> recentlyUnLoadedTimes = new HashMap<>();
+    static Map<ChunkPos, Integer>    recentlyLoadedTimes   = new HashMap<>();
+    static Map<ChunkPos, Integer>    recentlyUnLoadedTimes = new HashMap<>();
+    static Map<ChunkPos, LevelChunk> loadedChunksMap       = new HashMap<>();
 
     @SubscribeEvent
     public static void onChunkLoad(final ChunkEvent.Load event)
@@ -284,6 +307,7 @@ public class EventHandler
             return;
         }
 
+        loadedChunksMap.put(event.getChunk().getPos(), (LevelChunk) event.getChunk());
         loadedChunks++;
         if (loadingChunk != null)
         {
@@ -311,7 +335,7 @@ public class EventHandler
         }
 
         if (recentlyUnLoadedTimes.containsKey(event.getChunk().getPos())
-              && event.getLevel().getServer().getTickCount() - recentlyUnLoadedTimes.get(event.getChunk().getPos()) < 100)
+            && event.getLevel().getServer().getTickCount() - recentlyUnLoadedTimes.get(event.getChunk().getPos()) < 100)
         {
             BetterChunkLoading.LOGGER.warn("Loaded shortly after unload:" + event.getChunk().getPos());
         }
@@ -330,11 +354,12 @@ public class EventHandler
             return;
         }
 
+        loadedChunksMap.remove(event.getChunk().getPos());
         unloadedChunks++;
         recentlyUnLoadedTimes.put(event.getChunk().getPos(), event.getLevel().getServer().getTickCount());
 
         if (recentlyLoadedTimes.containsKey(event.getChunk().getPos())
-              && event.getLevel().getServer().getTickCount() - recentlyLoadedTimes.get(event.getChunk().getPos()) < 100)
+            && event.getLevel().getServer().getTickCount() - recentlyLoadedTimes.get(event.getChunk().getPos()) < 100)
         {
             BetterChunkLoading.LOGGER.warn("UnLoaded shortly after load:" + event.getChunk().getPos());
         }

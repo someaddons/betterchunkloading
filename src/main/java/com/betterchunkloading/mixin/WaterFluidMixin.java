@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.Overwrite;
 public class WaterFluidMixin
 {
     @Overwrite
-    protected boolean canConvertToSource(Level p_256670_)
+    public boolean canConvertToSource(Level p_256670_)
     {
         return CommonConfiguration.convertWaterSource;
     }

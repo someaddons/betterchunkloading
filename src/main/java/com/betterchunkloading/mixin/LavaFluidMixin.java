@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.Overwrite;
 public class LavaFluidMixin
 {
     @Overwrite
-    protected boolean canConvertToSource(Level p_256295_)
+    public boolean canConvertToSource(Level p_256295_)
     {
         return CommonConfiguration.convertLavaSource;
     }

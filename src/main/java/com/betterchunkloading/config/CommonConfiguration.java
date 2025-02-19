@@ -5,7 +5,7 @@ import com.google.gson.JsonObject;
 
 public class CommonConfiguration implements ICommonConfig
 {
-    public static boolean convertWaterSource = false;
+    public static boolean convertWaterSource = true;
     public static boolean convertLavaSource  = false;
     public boolean enablePrediction = true;
     public int     predictionarea   = 7;

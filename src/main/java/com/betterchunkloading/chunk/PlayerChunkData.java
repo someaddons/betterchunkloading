@@ -3,6 +3,7 @@ package com.betterchunkloading.chunk;
 import com.betterchunkloading.BetterChunkLoading;
 import com.betterchunkloading.event.EventHandler;
 import com.betterchunkloading.event.ITickingTask;
+import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
@@ -11,6 +12,7 @@ import net.minecraft.util.SortedArraySet;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
+import org.checkerframework.checker.units.qual.C;
 
 import java.util.*;
 
@@ -324,6 +326,8 @@ public class PlayerChunkData
 
         ChunkLoadingTask newTask = new ChunkLoadingTask(pos, chunkSource, new ArrayDeque<>(toLoad));
         EventHandler.addTickingTask(chunkSource.getLevel().dimension(), newTask);
+
+        checkExisting(chunkSource.level);
         if (viewDistLoadTask != null)
         {
             newTask.syncWithLastTask(viewDistLoadTask);
@@ -333,7 +337,7 @@ public class PlayerChunkData
 
         newTask.loadSpeedModifier = 7 * config.getCommonConfig().smartChunkLoadingSpeed;
         viewDistLoadTask = newTask;
-        checkExisting();
+        checkExisting(chunkSource.level);
 
         if (BetterChunkLoading.config.getCommonConfig().debugLogging)
         {
@@ -444,7 +448,6 @@ public class PlayerChunkData
                 {
                     SortedArraySet<Ticket<?>> ticketsAtPos = chunkSource.distanceManager.tickets.get(ticketToAdd.pos.toLong());
 
-                    boolean refreshedTicket = false;
                     if (ticketsAtPos != null && !ticketsAtPos.isEmpty())
                     {
                         for (final Ticket ticket : ticketsAtPos)
@@ -453,18 +456,11 @@ public class PlayerChunkData
                             {
                                 ticket.setCreatedTick(chunkSource.distanceManager.ticketTickCounter);
                                 loadedChunks.put(oldPos.pos, ticketToAdd);
-
-                                refreshedTicket = true;
+                                oldTask.loadedChunks.remove(oldPos.pos);
+                                iterator.remove();
                                 break;
                             }
                         }
-                    }
-
-                    oldTask.loadedChunks.remove(oldPos.pos);
-
-                    if (refreshedTicket)
-                    {
-                        iterator.remove();
                     }
                 }
             }
@@ -473,10 +469,6 @@ public class PlayerChunkData
         private void addTicketfor(final ChunkTicketPos ticketPos)
         {
             chunkSource.distanceManager.addTicket(ticketPos.type, ticketPos.pos, getTicketLevelForArea(ticketPos.ticketArea), ticketPos.pos);
-            if (BetterChunkLoading.IN_DEV)
-            {
-                chunkToTicketMap.computeIfAbsent(ticketPos.pos.toLong(), t -> new HashSet<>()).add(ticketPos);
-            }
 
             final ChunkTicketPos prev = loadedChunks.put(ticketPos.pos, ticketPos);
             if (prev != null && BetterChunkLoading.IN_DEV)
@@ -493,12 +485,6 @@ public class PlayerChunkData
                 if (chunkSource.getVisibleChunkIfPresent(ticketPos.pos.toLong()).getFullChunk() == null)
                 {
                     chunkSource.distanceManager.removeTicket(ticketPos.type, ticketPos.pos, getTicketLevelForArea(ticketPos.ticketArea), ticketPos.pos);
-                    if (BetterChunkLoading.IN_DEV)
-                    {
-                        chunkToTicketMap.computeIfAbsent(ticketPos.pos.toLong(), t -> new HashSet<>()).remove(ticketPos);
-                        chunkToTicketRmovedMap.computeIfAbsent(ticketPos.pos.toLong(), t -> new HashSet<>()).add(ticketPos);
-                    }
-
                     return;
                 }
 
@@ -510,17 +496,13 @@ public class PlayerChunkData
                     {
                         if (BetterChunkLoading.IN_DEV)
                         {
-                            chunkToTicketUnloadMap.computeIfAbsent(ticketPos.pos.toLong(), t -> new HashSet<>()).add(ticketPos);
+                            expiringTicketsMap.computeIfAbsent(ticketPos.pos.toLong(), t -> new HashSet<>()).add(ticket);
                         }
                         // Use the timer to unload one each tick, with a bit of delay giving the player a chance to refresh them.
                         ticket.setCreatedTick(chunkSource.distanceManager.ticketTickCounter - ticket.getType().timeout() + 30 + counter);
                         return;
                     }
                 }
-            }
-            else if (BetterChunkLoading.IN_DEV)
-            {
-                LOGGER.warn("Error ticket not found at position!");
             }
         }
     }
@@ -532,7 +514,7 @@ public class PlayerChunkData
      * @param ticketArea
      * @return
      */
-    private static int getTicketLevelForArea(final int ticketArea)
+    public static int getTicketLevelForArea(final int ticketArea)
     {
         return ChunkLevel.byStatus(FullChunkStatus.FULL) - ticketArea;
     }
@@ -634,6 +616,7 @@ public class PlayerChunkData
         ChunkLoadingTask newTask = new ChunkLoadingTask(center, ((ServerLevel) player.level()).getChunkSource(), new ArrayDeque<>(toLoad));
         EventHandler.addTickingTask(player.level().dimension(), newTask);
 
+        checkExisting(((ServerLevel) player.level()));
         if (predictionTask != null)
         {
             newTask.syncWithLastTask(predictionTask);
@@ -642,9 +625,8 @@ public class PlayerChunkData
             predictionTask.cancel();
         }
         predictionTask = newTask;
-        checkExisting();
         predictionTask.loadSpeedModifier = 10 * config.getCommonConfig().predictionLoadingSpeed;
-
+        checkExisting(((ServerLevel) player.level()));
         predictionTask.tick();
     }
 
@@ -695,47 +677,66 @@ public class PlayerChunkData
     /**
      * Debug tracking, to make sure no tickets are lost
      */
-    private static Long2ObjectOpenHashMap<Set<ChunkTicketPos>> chunkToTicketMap       = new Long2ObjectOpenHashMap();
-    private static Long2ObjectOpenHashMap<Set<ChunkTicketPos>> chunkToTicketUnloadMap = new Long2ObjectOpenHashMap();
-    private static Long2ObjectOpenHashMap<Set<ChunkTicketPos>> chunkToTicketRmovedMap = new Long2ObjectOpenHashMap();
+    private static Long2ObjectOpenHashMap<Set<Ticket>> expiringTicketsMap = new Long2ObjectOpenHashMap();
 
-    private void checkExisting()
+    public void checkExisting(final ServerLevel level)
     {
-        if (!BetterChunkLoading.IN_DEV)
+        if (!BetterChunkLoading.IN_DEV || lastChunk == null)
         {
             return;
         }
 
-        if (predictionTask != null)
+        for (final Long2ObjectMap.Entry<SortedArraySet<Ticket<?>>> ticketEntry : level.getChunkSource().distanceManager.tickets.long2ObjectEntrySet())
         {
-            for (final var entry : chunkToTicketMap.long2ObjectEntrySet())
+            final ChunkPos chunk = new ChunkPos(ticketEntry.getLongKey());
+            final double distance = chunk.getChessboardDistance(lastChunk);
+            for (final Ticket<?> ticket : ticketEntry.getValue())
             {
-                for (final ChunkTicketPos chunkTicketPos : entry.getValue())
+                if (ticket.getType() == chunkloadTicketType || ticket.getType() == predictionTicketType)
                 {
-                    if (!predictionTask.loadedChunks.containsKey(chunkTicketPos.pos) && (viewDistLoadTask == null || !viewDistLoadTask.loadedChunks.containsKey(chunkTicketPos.pos))
-                        && !chunkToTicketUnloadMap.getOrDefault(chunkTicketPos.pos.toLong(), new HashSet<>()).contains(chunkTicketPos))
-                    {
-                        LOGGER.warn("Lost ticket1!!!");
-                    }
-                }
-            }
-        }
+                    boolean tracked = false;
 
-        if (viewDistLoadTask != null)
-        {
-            for (final var entry : chunkToTicketMap.long2ObjectEntrySet())
-            {
-                for (final ChunkTicketPos chunkTicketPos : entry.getValue())
-                {
-                    if ((predictionTask == null || !predictionTask.loadedChunks.containsKey(chunkTicketPos.pos)) && (viewDistLoadTask == null
-                        || !viewDistLoadTask.loadedChunks.containsKey(chunkTicketPos.pos))
-                        && !chunkToTicketUnloadMap.getOrDefault(chunkTicketPos.pos.toLong(), new HashSet<>()).contains(chunkTicketPos))
+                    if (predictionTask != null && ticket.getType() == predictionTicketType)
                     {
-                        LOGGER.warn("Lost ticket2!!!");
+                        if (predictionTask.loadedChunks.get(chunk) != null)
+                        {
+                            if (distance > playerChunkLoadViewDistance * 3)
+                            {
+                                LOGGER.warn("Far distance ticket: " + chunk + " ticket:" + ticket);
+                            }
+
+                            tracked = true;
+                        }
+                    }
+
+                    if (viewDistLoadTask != null && ticket.getType() == chunkloadTicketType)
+                    {
+                        if (viewDistLoadTask.loadedChunks.get(chunk) != null)
+                        {
+                            if (distance > playerChunkLoadViewDistance * 3)
+                            {
+                                LOGGER.warn("Far distance ticket: " + chunk + " ticket:" + ticket);
+                            }
+
+                            tracked = true;
+                        }
+                    }
+
+                    if (!tracked)
+                    {
+                        if (expiringTicketsMap.containsKey(ticketEntry.getLongKey())
+                            && ((level.getChunkSource().distanceManager.ticketTickCounter - ticket.createdTick) + 30 + 100) > ticket.getType().timeout())
+                        {
+                            tracked = true;
+                        }
+                    }
+
+                    if (!tracked)
+                    {
+                        LOGGER.warn("Lost ticket reference at: " + chunk + " ticket:" + ticket);
                     }
                 }
             }
         }
     }
-
 }

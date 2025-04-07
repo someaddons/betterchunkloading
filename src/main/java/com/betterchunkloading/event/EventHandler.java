@@ -244,11 +244,11 @@ public class EventHandler
             {
                 dataPlayer.betterchunkloading$getPlayerChunkData().onChunkChanged(player, null);
             }
+        }
 
-            if (!BetterChunkLoading.IN_DEV)
-            {
-                return;
-            }
+        if (!BetterChunkLoading.IN_DEV)
+        {
+            return;
         }
 
         if (player.level().getGameTime() % (20 * 10) == 0)
